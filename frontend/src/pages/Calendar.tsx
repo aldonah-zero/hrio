@@ -134,6 +134,15 @@ const Calendar: React.FC = () => {
     fetchSessions();
     fetchClients();
     fetchLinks();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchSessions();
+        fetchLinks();
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Build a map: sessionId → client name(s)
