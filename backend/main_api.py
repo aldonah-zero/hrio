@@ -10,14 +10,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic_classes import *
 from sql_alchemy import *
-import smtplib
-from email.mime.text import MIMEText
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-SMTP_USER = "igorpavlov106@gmail.com"
-SMTP_PASSWORD = "nginyrskzzjphpgk"
+import resend
+import os
+
+resend.api_key = os.getenv("RESEND_API_KEY")
 ############################################
 #
 #   Initialize the database
@@ -70,9 +71,6 @@ def format_datetime(dt):
 
 def send_session_email(action, client_name, pocetak, kraj, cena):
 
-    sender = SMTP_USER
-    recipient = SMTP_USER
-
     config = {
         "created": {
             "title": "📅 Nova sesija zakazana",
@@ -91,117 +89,44 @@ def send_session_email(action, client_name, pocetak, kraj, cena):
     title = config[action]["title"]
     color = config[action]["color"]
 
-    body = f"""
-    <html>
-    <body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+    html = f"""
+    <div style="font-family:Arial;background:#f3f4f6;padding:30px">
 
-    <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0">
-    <tr>
-    <td align="center">
+        <div style="
+            max-width:520px;
+            margin:auto;
+            background:white;
+            border-radius:12px;
+            overflow:hidden;
+            box-shadow:0 10px 30px rgba(0,0,0,0.08);
+        ">
 
-    <table width="520" cellpadding="0" cellspacing="0"
-    style="background:#ffffff;border-radius:12px;
-    box-shadow:0 10px 30px rgba(0,0,0,0.08);
-    overflow:hidden">
+            <div style="background:{color};padding:20px;color:white">
+                <b>🧠 PsihApp</b>
+            </div>
 
-    <tr>
-    <td style="background:{color};padding:22px 28px;color:white">
+            <div style="padding:25px">
 
-    <span style="font-size:18px;font-weight:600">
-    🧠 PsihApp
-    </span>
+                <h2>{title}</h2>
 
-    <span style="float:right;font-size:14px;opacity:.8">
-    Kalendar
-    </span>
+                <p><b>Klijent:</b> {client_name}</p>
+                <p><b>Početak:</b> {format_datetime(pocetak)}</p>
+                <p><b>Kraj:</b> {format_datetime(kraj)}</p>
+                <p><b>Cena:</b> {cena} RSD</p>
 
-    </td>
-    </tr>
+            </div>
 
-    <tr>
-    <td style="padding:30px">
+        </div>
 
-    <h2 style="margin:0 0 20px 0;color:#111827;font-size:22px">
-    {title}
-    </h2>
-
-    <table width="100%" cellpadding="0" cellspacing="0">
-
-    <tr>
-    <td style="padding:14px 0;border-bottom:1px solid #eee">
-    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
-    Klijent
     </div>
-    <div style="font-size:16px;font-weight:600;color:#111827">
-    {client_name}
-    </div>
-    </td>
-    </tr>
-
-    <tr>
-    <td style="padding:14px 0;border-bottom:1px solid #eee">
-    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
-    Početak
-    </div>
-    <div style="font-size:15px;color:#111827">
-    {format_datetime(pocetak)}
-    </div>
-    </td>
-    </tr>
-
-    <tr>
-    <td style="padding:14px 0;border-bottom:1px solid #eee">
-    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
-    Kraj
-    </div>
-    <div style="font-size:15px;color:#111827">
-    {format_datetime(kraj)}
-    </div>
-    </td>
-    </tr>
-
-    <tr>
-    <td style="padding:14px 0">
-    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
-    Cena
-    </div>
-    <div style="font-size:18px;font-weight:600;color:{color}">
-    {cena} RSD
-    </div>
-    </td>
-    </tr>
-
-    </table>
-
-    </td>
-    </tr>
-
-    <tr>
-    <td style="background:#f9fafb;padding:18px;text-align:center;font-size:12px;color:#6b7280">
-
-    Automatska notifikacija iz PsihApp kalendara
-
-    </td>
-    </tr>
-
-    </table>
-
-    </td>
-    </tr>
-    </table>
-
-    </body>
-    </html>
     """
 
-    msg = MIMEText(body, "html")
-    msg["Subject"] = title
-    msg["From"] = sender
-    msg["To"] = recipient
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(sender, SMTP_PASSWORD)
-        server.sendmail(sender, recipient, msg.as_string())
+    resend.Emails.send({
+        "from": "PsihApp <onboarding@resend.dev>",
+        "to": ["igorpavlov106@gmail.com"],
+        "subject": title,
+        "html": html
+    })
 # def send_email(subject, body):
 #
 #     sender = "igorpavlov106@gmail.com"
