@@ -10,11 +10,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic_classes import *
 from sql_alchemy import *
+import smtplib
+from email.mime.text import MIMEText
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+SMTP_USER = "igorpavlov106@gmail.com"
+SMTP_PASSWORD = "nginyrskzzjphpgk"
 ############################################
 #
 #   Initialize the database
@@ -59,7 +62,160 @@ app = FastAPI(
         {"name": "Klijent Relationships", "description": "Manage Klijent relationships"},
     ]
 )
+def format_datetime(dt):
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt.replace("Z", ""))
+    return dt.strftime("%d.%m.%Y • %H:%M")
 
+
+def send_session_email(action, client_name, pocetak, kraj, cena):
+
+    sender = SMTP_USER
+    recipient = SMTP_USER
+
+    config = {
+        "created": {
+            "title": "📅 Nova sesija zakazana",
+            "color": "#4f46e5"
+        },
+        "updated": {
+            "title": "✏️ Sesija izmenjena",
+            "color": "#f59e0b"
+        },
+        "deleted": {
+            "title": "🗑️ Sesija obrisana",
+            "color": "#ef4444"
+        }
+    }
+
+    title = config[action]["title"]
+    color = config[action]["color"]
+
+    body = f"""
+    <html>
+    <body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0">
+    <tr>
+    <td align="center">
+
+    <table width="520" cellpadding="0" cellspacing="0"
+    style="background:#ffffff;border-radius:12px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+    overflow:hidden">
+
+    <tr>
+    <td style="background:{color};padding:22px 28px;color:white">
+
+    <span style="font-size:18px;font-weight:600">
+    🧠 PsihApp
+    </span>
+
+    <span style="float:right;font-size:14px;opacity:.8">
+    Kalendar
+    </span>
+
+    </td>
+    </tr>
+
+    <tr>
+    <td style="padding:30px">
+
+    <h2 style="margin:0 0 20px 0;color:#111827;font-size:22px">
+    {title}
+    </h2>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+
+    <tr>
+    <td style="padding:14px 0;border-bottom:1px solid #eee">
+    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
+    Klijent
+    </div>
+    <div style="font-size:16px;font-weight:600;color:#111827">
+    {client_name}
+    </div>
+    </td>
+    </tr>
+
+    <tr>
+    <td style="padding:14px 0;border-bottom:1px solid #eee">
+    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
+    Početak
+    </div>
+    <div style="font-size:15px;color:#111827">
+    {format_datetime(pocetak)}
+    </div>
+    </td>
+    </tr>
+
+    <tr>
+    <td style="padding:14px 0;border-bottom:1px solid #eee">
+    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
+    Kraj
+    </div>
+    <div style="font-size:15px;color:#111827">
+    {format_datetime(kraj)}
+    </div>
+    </td>
+    </tr>
+
+    <tr>
+    <td style="padding:14px 0">
+    <div style="color:#6b7280;font-size:13px;margin-bottom:4px">
+    Cena
+    </div>
+    <div style="font-size:18px;font-weight:600;color:{color}">
+    {cena} RSD
+    </div>
+    </td>
+    </tr>
+
+    </table>
+
+    </td>
+    </tr>
+
+    <tr>
+    <td style="background:#f9fafb;padding:18px;text-align:center;font-size:12px;color:#6b7280">
+
+    Automatska notifikacija iz PsihApp kalendara
+
+    </td>
+    </tr>
+
+    </table>
+
+    </td>
+    </tr>
+    </table>
+
+    </body>
+    </html>
+    """
+
+    msg = MIMEText(body, "html")
+    msg["Subject"] = title
+    msg["From"] = sender
+    msg["To"] = recipient
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender, SMTP_PASSWORD)
+        server.sendmail(sender, recipient, msg.as_string())
+# def send_email(subject, body):
+#
+#     sender = "igorpavlov106@gmail.com"
+#     password = "nginyrskzzjphpgk"
+#     recipient = "igorpavlov106@gmail.com"
+#
+#     msg = MIMEText(body)
+#     msg["Subject"] = subject
+#     msg["From"] = sender
+#     msg["To"] = recipient
+#
+#     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+#         server.login(sender, password)
+#         server.sendmail(sender, recipient, msg.as_string())
 # Enable CORS for all origins (for development)
 app.add_middleware(
     CORSMiddleware,
@@ -1041,7 +1197,13 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
     database.add(db_sesija)
     database.commit()
     database.refresh(db_sesija)
-
+    send_session_email(
+        action="created",
+        client_name=f"Igor Pavlov",
+        pocetak=db_sesija.pocetak,
+        kraj=db_sesija.kraj,
+        cena=db_sesija.cena
+    )
     if sesija_data.uplate:
         # Validate that all Cena IDs exist
         for cena_id in sesija_data.uplate:
@@ -1209,7 +1371,14 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
             )
     database.commit()
     database.refresh(db_sesija)
+    send_session_email(
+        action="updated",
+        client_name=f"Igor pavlov",
+        pocetak=db_sesija.pocetak,
+        kraj=db_sesija.kraj,
+        cena=db_sesija.cena
 
+    )
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
@@ -1227,6 +1396,13 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Sesija not found")
     database.delete(db_sesija)
     database.commit()  # <-- DODAJ
+    send_session_email(
+        action="deleted",
+        client_name=f"Igor Pavlov",
+        pocetak=db_sesija.pocetak,
+        kraj=db_sesija.kraj,
+        cena=db_sesija.cena
+    )
     return {"message": "Deleted", "id": sesija_id}
 
 
