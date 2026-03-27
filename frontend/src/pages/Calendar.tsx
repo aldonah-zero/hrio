@@ -325,48 +325,111 @@ const Calendar: React.FC = () => {
         </div>
       </div>
 
-      {/* Week View */}
+      {/* Week View — Desktop grid */}
       {view === "week" && (
-        <div className="cal-week">
-          {/* Time column */}
-          <div className="cal-time-col">
-            <div className="cal-time-header"></div>
-            {HOURS.map((h) => (
-              <div key={h} className="cal-time-slot">
-                {String(h).padStart(2, "0")}:00
-              </div>
-            ))}
+        <>
+          {/* Desktop/Tablet: time grid */}
+          <div className="cal-week cal-week-desktop">
+            {/* Time column */}
+            <div className="cal-time-col">
+              <div className="cal-time-header"></div>
+              {HOURS.map((h) => (
+                <div key={h} className="cal-time-slot">
+                  {String(h).padStart(2, "0")}:00
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
+            {weekDays.map((day, dayIdx) => {
+              const isToday = isSameDay(day, today);
+              const daySessions = getSessionsForDay(day);
+
+              return (
+                <div
+                  key={dayIdx}
+                  className={`cal-day-col ${isToday ? "today" : ""}`}
+                >
+                  <div className={`cal-day-header ${isToday ? "today" : ""}`}>
+                    <span className="cal-day-name">{DAYS[dayIdx]}</span>
+                    <span className={`cal-day-num ${isToday ? "today" : ""}`}>
+                      {day.getDate()}
+                    </span>
+                  </div>
+                  {HOURS.map((h) => {
+                    const hourSessions = daySessions.filter((s) => {
+                      const sHour = new Date(s.pocetak).getHours();
+                      return sHour === h;
+                    });
+
+                    return (
+                      <div
+                        key={h}
+                        className="cal-hour-cell"
+                        onClick={() => openNewSession(day, h)}
+                      >
+                        {hourSessions.map((s) => {
+                          const start = new Date(s.pocetak);
+                          const end = new Date(s.kraj);
+                          const colors =
+                            statusColors[s.status] || statusColors.default;
+
+                          return (
+                            <div
+                              key={s.id}
+                              className="cal-session-block"
+                              style={{
+                                backgroundColor: colors.bg,
+                                borderLeft: `3px solid ${colors.border}`,
+                                color: colors.text,
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditSession(s);
+                              }}
+                            >
+                              <span className="cal-session-time">
+                                {formatTime(start)} - {formatTime(end)}
+                              </span>
+                              <span className="cal-session-price">
+                                {s.cena.toLocaleString()} RSD
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Day columns */}
-          {weekDays.map((day, dayIdx) => {
-            const isToday = isSameDay(day, today);
-            const daySessions = getSessionsForDay(day);
+          {/* Mobile: agenda list */}
+          <div className="cal-week-mobile">
+            {weekDays.map((day, dayIdx) => {
+              const isToday = isSameDay(day, today);
+              const daySessions = getSessionsForDay(day);
 
-            return (
-              <div
-                key={dayIdx}
-                className={`cal-day-col ${isToday ? "today" : ""}`}
-              >
-                <div className={`cal-day-header ${isToday ? "today" : ""}`}>
-                  <span className="cal-day-name">{DAYS[dayIdx]}</span>
-                  <span className={`cal-day-num ${isToday ? "today" : ""}`}>
-                    {day.getDate()}
-                  </span>
-                </div>
-                {HOURS.map((h) => {
-                  const hourSessions = daySessions.filter((s) => {
-                    const sHour = new Date(s.pocetak).getHours();
-                    return sHour === h;
-                  });
-
-                  return (
-                    <div
-                      key={h}
-                      className="cal-hour-cell"
-                      onClick={() => openNewSession(day, h)}
+              return (
+                <div
+                  key={dayIdx}
+                  className={`cal-agenda-day ${isToday ? "today" : ""}`}
+                  onClick={() => openNewSession(day, 10)}
+                >
+                  <div className="cal-agenda-date">
+                    <span
+                      className={`cal-agenda-day-num ${isToday ? "today" : ""}`}
                     >
-                      {hourSessions.map((s) => {
+                      {day.getDate()}
+                    </span>
+                    <span className="cal-agenda-day-name">{DAYS[dayIdx]}</span>
+                  </div>
+                  <div className="cal-agenda-sessions">
+                    {daySessions.length === 0 ? (
+                      <span className="cal-agenda-empty">Nema sesija</span>
+                    ) : (
+                      daySessions.map((s) => {
                         const start = new Date(s.pocetak);
                         const end = new Date(s.kraj);
                         const colors =
@@ -375,7 +438,7 @@ const Calendar: React.FC = () => {
                         return (
                           <div
                             key={s.id}
-                            className="cal-session-block"
+                            className="cal-agenda-item"
                             style={{
                               backgroundColor: colors.bg,
                               borderLeft: `3px solid ${colors.border}`,
@@ -386,22 +449,25 @@ const Calendar: React.FC = () => {
                               openEditSession(s);
                             }}
                           >
-                            <span className="cal-session-time">
+                            <span className="cal-agenda-item-time">
                               {formatTime(start)} - {formatTime(end)}
                             </span>
-                            <span className="cal-session-price">
+                            <span className="cal-agenda-item-price">
                               {s.cena.toLocaleString()} RSD
+                            </span>
+                            <span className="cal-agenda-item-status">
+                              {s.status}
                             </span>
                           </div>
                         );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Month View */}
