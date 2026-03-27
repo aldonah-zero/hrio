@@ -92,140 +92,25 @@ def send_session_email(action, client_name, pocetak, kraj, cena):
     icon = config[action]["icon"]
 
     html = f"""
-    <div style="
-        background:#f2f2f7;
-        padding:40px 20px;
-        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;
-    ">
-        <div style="max-width:520px; margin:auto;">
-
-            <!-- HEADER -->
-            <div style="
-                text-align:center;
-                margin-bottom:20px;
-                font-weight:600;
-                color:#111;
-                font-size:18px;
-            ">
-                🧠 PsihApp
-            </div>
-
-            <!-- EVENT CARD -->
-            <div style="
-                background:#ffffff;
-                border-radius:16px;
-                box-shadow:0 4px 24px rgba(0,0,0,0.06);
-                overflow:hidden;
-            ">
-
-                <!-- STATUS BAR -->
-                <div style="height:5px; background:{color};"></div>
-
-                <div style="padding:28px 28px 24px;">
-
-                    <div style="
-                        font-size:20px;
-                        font-weight:700;
-                        color:#111;
-                        margin-bottom:4px;
-                    ">
-                        {icon} {title}
-                    </div>
-
-                    <div style="
-                        color:#9ca3af;
-                        font-size:13px;
-                        margin-bottom:28px;
-                    ">
-                        Automatsko obaveštenje iz PsihApp sistema
-                    </div>
-
-                    <!-- CLIENT -->
-                    <div style="margin-bottom:22px;">
-                        <div style="
-                            font-size:11px;
-                            text-transform:uppercase;
-                            letter-spacing:1.2px;
-                            color:#9ca3af;
-                            margin-bottom:4px;
-                            font-weight:500;
-                        ">
-                            Klijent
-                        </div>
-                        <div style="
-                            font-size:17px;
-                            font-weight:600;
-                            color:#111;
-                        ">
-                            {client_name}
-                        </div>
-                    </div>
-
-                    <!-- SESSION DETAILS (table for email compatibility) -->
-                    <table cellpadding="0" cellspacing="0" style="
-                        width:100%;
-                        background:#f9fafb;
-                        border-radius:12px;
-                        border-collapse:collapse;
-                    ">
-                        <tr>
-                            <td style="
-                                padding:16px 18px 8px;
-                                color:#6b7280;
-                                font-size:14px;
-                            ">Početak</td>
-                            <td style="
-                                padding:16px 18px 8px;
-                                text-align:right;
-                                font-weight:600;
-                                font-size:14px;
-                                color:#111;
-                            ">{format_datetime(pocetak)}</td>
-                        </tr>
-                        <tr>
-                            <td style="
-                                padding:8px 18px;
-                                color:#6b7280;
-                                font-size:14px;
-                            ">Kraj</td>
-                            <td style="
-                                padding:8px 18px;
-                                text-align:right;
-                                font-weight:600;
-                                font-size:14px;
-                                color:#111;
-                            ">{format_datetime(kraj)}</td>
-                        </tr>
-                        <tr>
-                            <td style="
-                                padding:8px 18px 16px;
-                                color:#6b7280;
-                                font-size:14px;
-                            ">Cena</td>
-                            <td style="
-                                padding:8px 18px 16px;
-                                text-align:right;
-                                font-weight:700;
-                                font-size:14px;
-                                color:{color};
-                            ">{cena} RSD</td>
-                        </tr>
-                    </table>
-
-                </div>
-            </div>
-
-            <!-- FOOTER -->
-            <div style="
-                text-align:center;
-                font-size:12px;
-                color:#9ca3af;
-                margin-top:18px;
-            ">
-                PsihApp • Sistem za upravljanje sesijama
-            </div>
-
-        </div>
+    <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;">
+    <div style="max-width:480px;margin:auto;">
+    <div style="text-align:center;margin-bottom:16px;font-weight:600;color:#111;font-size:17px;">🧠 PsihApp</div>
+    <div style="background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="height:5px;background:{color};"></div>
+    <div style="padding:24px;">
+    <div style="font-size:19px;font-weight:700;color:#111;margin-bottom:3px;">{icon} {title}</div>
+    <div style="color:#9ca3af;font-size:13px;margin-bottom:24px;">Automatsko obaveštenje iz PsihApp sistema</div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:3px;font-weight:500;">Klijent</div>
+    <div style="font-size:16px;font-weight:600;color:#111;margin-bottom:20px;">{client_name}</div>
+    <table cellpadding="0" cellspacing="0" width="100%" style="background:#f9fafb;border-radius:10px;">
+    <tr><td style="padding:14px 16px 6px;color:#6b7280;font-size:14px;">Početak</td><td style="padding:14px 16px 6px;text-align:right;font-weight:600;font-size:14px;color:#111;">{format_datetime(pocetak)}</td></tr>
+    <tr><td style="padding:6px 16px;color:#6b7280;font-size:14px;">Kraj</td><td style="padding:6px 16px;text-align:right;font-weight:600;font-size:14px;color:#111;">{format_datetime(kraj)}</td></tr>
+    <tr><td style="padding:6px 16px 14px;color:#6b7280;font-size:14px;">Cena</td><td style="padding:6px 16px 14px;text-align:right;font-weight:700;font-size:14px;color:{color};">{cena} RSD</td></tr>
+    </table>
+    </div>
+    </div>
+    <div style="text-align:center;font-size:11px;color:#9ca3af;margin-top:14px;">PsihApp • Sistem za upravljanje sesijama</div>
+    </div>
     </div>
     """
 
