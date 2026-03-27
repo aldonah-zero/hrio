@@ -63,7 +63,9 @@ const statusColors: Record<
 
 const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<"week" | "month">("week");
+  const [view, setView] = useState<"week" | "month">(
+    window.innerWidth <= 768 ? "month" : "week",
+  );
   const [sessions, setSessions] = useState<Session[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [showModal, setShowModal] = useState(false);

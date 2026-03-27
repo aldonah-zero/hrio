@@ -22,6 +22,30 @@ body {
 }
 
 /* ============================
+   MOBILE HEADER
+   ============================ */
+.psych-mobile-header {
+  display: none;
+}
+
+/* ============================
+   OVERLAY (mobile)
+   ============================ */
+.psych-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 150;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================
    SIDEBAR
    ============================ */
 .psych-sidebar {
@@ -36,8 +60,9 @@ body {
   top: 0;
   left: 0;
   bottom: 0;
-  z-index: 100;
+  z-index: 200;
   overflow-y: auto;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .psych-sidebar-header {
@@ -46,6 +71,26 @@ body {
   gap: 14px;
   padding: 28px 24px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+
+.psych-sidebar-close {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: none;
+}
+
+.psych-sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 .psych-logo-icon {
@@ -60,11 +105,23 @@ body {
   flex-shrink: 0;
 }
 
+.psych-logo-icon-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
 .psych-logo-text {
   font-size: 20px;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.02em;
+}
+
+.psych-logo-text-sm {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .psych-logo-sub {
@@ -130,6 +187,49 @@ body {
   font-size: 11px;
   color: #475569;
   text-align: center;
+}
+
+/* ============================
+   HAMBURGER
+   ============================ */
+.psych-hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.psych-hamburger:hover {
+  background: #f1f5f9;
+}
+
+.psych-hamburger-line {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: #334155;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.psych-hamburger-line.open:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.psych-hamburger-line.open:nth-child(2) {
+  opacity: 0;
+}
+
+.psych-hamburger-line.open:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
 }
 
 /* ============================
@@ -590,13 +690,14 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 16px;
 }
 
 .cal-modal {
   background: #ffffff;
   border-radius: 20px;
   width: 460px;
-  max-width: 92vw;
+  max-width: 100%;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
@@ -666,6 +767,7 @@ body {
   background: #f8fafc;
   transition: all 0.2s;
   outline: none;
+  width: 100%;
 }
 
 .cal-form-group input:focus,
@@ -740,7 +842,7 @@ body {
 }
 
 /* ============================
-   RESPONSIVE
+   RESPONSIVE — TABLET (1024px)
    ============================ */
 @media (max-width: 1024px) {
   .psych-sidebar {
@@ -749,22 +851,369 @@ body {
   }
   .psych-main {
     margin-left: 220px;
-    padding: 20px;
+    padding: 24px;
+  }
+  .admin-title,
+  .cal-title {
+    font-size: 24px;
+  }
+  .admin-tab {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  .cal-day-num {
+    font-size: 16px;
+  }
+  .cal-month-cell {
+    min-height: 80px;
+    padding: 6px;
   }
 }
 
+/* ============================
+   RESPONSIVE — MOBILE (768px)
+   ============================ */
 @media (max-width: 768px) {
-  .psych-sidebar {
-    display: none;
+  /* Mobile header visible */
+  .psych-mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 16px;
+    z-index: 100;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   }
+
+  .psych-mobile-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .psych-mobile-page-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 4px 12px;
+    border-radius: 6px;
+  }
+
+  /* Sidebar slide-in */
+  .psych-sidebar {
+    width: 280px;
+    min-width: 280px;
+    transform: translateX(-100%);
+  }
+
+  .psych-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .psych-sidebar.closed {
+    transform: translateX(-100%);
+  }
+
+  .psych-sidebar-close {
+    display: flex;
+  }
+
+  /* Main content */
   .psych-main {
     margin-left: 0;
-    padding: 16px;
+    padding: 72px 16px 24px;
   }
+
+  /* Admin */
+  .admin-title,
+  .cal-title {
+    font-size: 22px;
+  }
+
+  .admin-subtitle,
+  .cal-subtitle {
+    font-size: 13px;
+  }
+
+  .admin-tabs {
+    padding: 4px;
+    gap: 4px;
+    border-radius: 12px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .admin-tab svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .admin-table-container {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  /* Calendar header */
+  .cal-header {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .cal-header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .cal-view-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .cal-nav-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .cal-add-btn {
+    padding: 8px 14px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .cal-add-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Week view scroll */
   .cal-week {
     overflow-x: auto;
+    border-radius: 12px;
+    -webkit-overflow-scrolling: touch;
   }
+
+  .cal-day-col {
+    min-width: 100px;
+  }
+
+  .cal-time-col {
+    width: 50px;
+    min-width: 50px;
+  }
+
+  .cal-time-slot {
+    font-size: 10px;
+    height: 60px;
+  }
+
+  .cal-day-header {
+    height: 52px;
+  }
+
+  .cal-day-name {
+    font-size: 10px;
+  }
+
+  .cal-day-num {
+    font-size: 14px;
+  }
+
+  .cal-day-num.today {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+
+  .cal-hour-cell {
+    height: 60px;
+  }
+
+  .cal-session-time {
+    font-size: 10px;
+  }
+
+  .cal-session-price {
+    font-size: 9px;
+  }
+
+  /* Month view */
+  .cal-month-day-name {
+    padding: 8px 4px;
+    font-size: 10px;
+  }
+
+  .cal-month-cell {
+    min-height: 60px;
+    padding: 4px;
+  }
+
+  .cal-month-date {
+    font-size: 11px;
+  }
+
+  .cal-month-date.today {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+
+  .cal-month-session-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  /* Legend */
+  .cal-legend {
+    gap: 12px;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+  }
+
+  .cal-legend-item {
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .cal-legend-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* Modal */
+  .cal-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .cal-modal {
+    border-radius: 20px 20px 0 0;
+    max-height: 92vh;
+    width: 100%;
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .cal-modal-header {
+    padding: 16px 20px 0;
+    position: sticky;
+    top: 0;
+    background: #ffffff;
+    z-index: 1;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 12px;
+  }
+
+  .cal-modal-header h2 {
+    font-size: 17px;
+  }
+
+  .cal-modal-body {
+    padding: 16px 20px;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .cal-form-group label {
+    font-size: 12px;
+  }
+
+  .cal-form-group input,
+  .cal-form-group select {
+    padding: 10px 12px;
+    font-size: 15px;
+    border-radius: 8px;
+    /* Prevent iOS zoom on input focus */
+    font-size: 16px;
+  }
+
   .cal-form-row {
     flex-direction: column;
+    gap: 12px;
+  }
+
+  .cal-modal-footer {
+    padding: 12px 20px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    position: sticky;
+    bottom: 0;
+    background: #ffffff;
+    border-top: 1px solid #f1f5f9;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .cal-btn {
+    padding: 12px 16px;
+    font-size: 14px;
+    flex: 1;
+    text-align: center;
+  }
+
+  .cal-btn-danger {
+    flex: 0 0 auto;
+  }
+}
+
+/* ============================
+   RESPONSIVE — SMALL MOBILE (480px)
+   ============================ */
+@media (max-width: 480px) {
+  .psych-main {
+    padding: 64px 12px 20px;
+  }
+
+  .admin-title,
+  .cal-title {
+    font-size: 20px;
+  }
+
+  .admin-tabs {
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .admin-tab {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .admin-table-container {
+    padding: 8px;
+    border-radius: 10px;
+  }
+
+  .cal-header-right {
+    flex-wrap: wrap;
+  }
+
+  .cal-month-cell {
+    min-height: 48px;
+    padding: 3px;
+  }
+
+  .cal-month-date {
+    font-size: 10px;
   }
 }
