@@ -64,56 +64,171 @@ app = FastAPI(
     ]
 )
 def format_datetime(dt):
-    if isinstance(dt, str):
-        dt = datetime.fromisoformat(dt.replace("Z", ""))
-    return dt.strftime("%d.%m.%Y • %H:%M")
+    return dt.strftime("%d.%m.%Y %H:%M")
 
 
 def send_session_email(action, client_name, pocetak, kraj, cena):
 
     config = {
         "created": {
-            "title": "📅 Nova sesija zakazana",
-            "color": "#4f46e5"
+            "title": "Nova sesija zakazana",
+            "color": "#4f46e5",
+            "icon": "📅"
         },
         "updated": {
-            "title": "✏️ Sesija izmenjena",
-            "color": "#f59e0b"
+            "title": "Sesija izmenjena",
+            "color": "#f59e0b",
+            "icon": "✏️"
         },
         "deleted": {
-            "title": "🗑️ Sesija obrisana",
-            "color": "#ef4444"
+            "title": "Sesija otkazana",
+            "color": "#ef4444",
+            "icon": "🗑️"
         }
     }
 
     title = config[action]["title"]
     color = config[action]["color"]
+    icon = config[action]["icon"]
 
     html = f"""
-    <div style="font-family:Arial;background:#f3f4f6;padding:30px">
+    <div style="
+        background:#f2f2f7;
+        padding:40px 20px;
+        font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica;
+    ">
 
         <div style="
             max-width:520px;
             margin:auto;
-            background:white;
-            border-radius:12px;
-            overflow:hidden;
-            box-shadow:0 10px 30px rgba(0,0,0,0.08);
         ">
 
-            <div style="background:{color};padding:20px;color:white">
-                <b>🧠 PsihApp</b>
+            <!-- HEADER -->
+            <div style="
+                text-align:center;
+                margin-bottom:20px;
+                font-weight:600;
+                color:#111;
+                font-size:18px;
+            ">
+                🧠 PsihApp
             </div>
 
-            <div style="padding:25px">
+            <!-- EVENT CARD -->
+            <div style="
+                background:white;
+                border-radius:16px;
+                box-shadow:0 12px 30px rgba(0,0,0,0.08);
+                overflow:hidden;
+            ">
 
-                <h2>{title}</h2>
+                <!-- STATUS BAR -->
+                <div style="
+                    height:6px;
+                    background:{color};
+                "></div>
 
-                <p><b>Klijent:</b> {client_name}</p>
-                <p><b>Početak:</b> {format_datetime(pocetak)}</p>
-                <p><b>Kraj:</b> {format_datetime(kraj)}</p>
-                <p><b>Cena:</b> {cena} RSD</p>
+                <div style="padding:26px">
 
+                    <div style="
+                        font-size:20px;
+                        font-weight:600;
+                        margin-bottom:6px;
+                        color:#111;
+                    ">
+                        {icon} {title}
+                    </div>
+
+                    <div style="
+                        color:#6b7280;
+                        font-size:14px;
+                        margin-bottom:24px;
+                    ">
+                        Automatsko obaveštenje iz PsihApp sistema
+                    </div>
+
+                    <!-- CLIENT -->
+                    <div style="margin-bottom:20px">
+
+                        <div style="
+                            font-size:12px;
+                            text-transform:uppercase;
+                            letter-spacing:1px;
+                            color:#9ca3af;
+                            margin-bottom:4px;
+                        ">
+                            Klijent
+                        </div>
+
+                        <div style="
+                            font-size:18px;
+                            font-weight:600;
+                            color:#111;
+                        ">
+                            {client_name}
+                        </div>
+
+                    </div>
+
+                    <!-- SESSION DETAILS -->
+                    <div style="
+                        background:#f9fafb;
+                        border-radius:12px;
+                        padding:18px;
+                    ">
+
+                        <div style="
+                            display:flex;
+                            justify-content:space-between;
+                            margin-bottom:10px;
+                            font-size:14px;
+                        ">
+                            <span style="color:#6b7280">Početak</span>
+                            <span style="font-weight:600">
+                                {format_datetime(pocetak)}
+                            </span>
+                        </div>
+
+                        <div style="
+                            display:flex;
+                            justify-content:space-between;
+                            margin-bottom:10px;
+                            font-size:14px;
+                        ">
+                            <span style="color:#6b7280">Kraj</span>
+                            <span style="font-weight:600">
+                                {format_datetime(kraj)}
+                            </span>
+                        </div>
+
+                        <div style="
+                            display:flex;
+                            justify-content:space-between;
+                            font-size:14px;
+                        ">
+                            <span style="color:#6b7280">Cena</span>
+                            <span style="
+                                font-weight:700;
+                                color:{color};
+                            ">
+                                {cena} RSD
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- FOOTER -->
+            <div style="
+                text-align:center;
+                font-size:12px;
+                color:#9ca3af;
+                margin-top:18px;
+            ">
+                PsihApp • Sistem za upravljanje sesijama
             </div>
 
         </div>
@@ -124,7 +239,7 @@ def send_session_email(action, client_name, pocetak, kraj, cena):
     resend.Emails.send({
         "from": "PsihApp <onboarding@resend.dev>",
         "to": ["igorpavlov106@gmail.com"],
-        "subject": title,
+        "subject": f"{icon} {title}",
         "html": html
     })
 # def send_email(subject, body):
