@@ -95,13 +95,9 @@ def send_session_email(action, client_name, pocetak, kraj, cena):
     <div style="
         background:#f2f2f7;
         padding:40px 20px;
-        font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;
     ">
-
-        <div style="
-            max-width:520px;
-            margin:auto;
-        ">
+        <div style="max-width:520px; margin:auto;">
 
             <!-- HEADER -->
             <div style="
@@ -116,109 +112,107 @@ def send_session_email(action, client_name, pocetak, kraj, cena):
 
             <!-- EVENT CARD -->
             <div style="
-                background:white;
+                background:#ffffff;
                 border-radius:16px;
-                box-shadow:0 12px 30px rgba(0,0,0,0.08);
+                box-shadow:0 4px 24px rgba(0,0,0,0.06);
                 overflow:hidden;
             ">
 
                 <!-- STATUS BAR -->
-                <div style="
-                    height:6px;
-                    background:{color};
-                "></div>
+                <div style="height:5px; background:{color};"></div>
 
-                <div style="padding:26px">
+                <div style="padding:28px 28px 24px;">
 
                     <div style="
                         font-size:20px;
-                        font-weight:600;
-                        margin-bottom:6px;
+                        font-weight:700;
                         color:#111;
+                        margin-bottom:4px;
                     ">
                         {icon} {title}
                     </div>
 
                     <div style="
-                        color:#6b7280;
-                        font-size:14px;
-                        margin-bottom:24px;
+                        color:#9ca3af;
+                        font-size:13px;
+                        margin-bottom:28px;
                     ">
                         Automatsko obaveštenje iz PsihApp sistema
                     </div>
 
                     <!-- CLIENT -->
-                    <div style="margin-bottom:20px">
-
+                    <div style="margin-bottom:22px;">
                         <div style="
-                            font-size:12px;
+                            font-size:11px;
                             text-transform:uppercase;
-                            letter-spacing:1px;
+                            letter-spacing:1.2px;
                             color:#9ca3af;
                             margin-bottom:4px;
+                            font-weight:500;
                         ">
                             Klijent
                         </div>
-
                         <div style="
-                            font-size:18px;
+                            font-size:17px;
                             font-weight:600;
                             color:#111;
                         ">
                             {client_name}
                         </div>
-
                     </div>
 
-                    <!-- SESSION DETAILS -->
-                    <div style="
+                    <!-- SESSION DETAILS (table for email compatibility) -->
+                    <table cellpadding="0" cellspacing="0" style="
+                        width:100%;
                         background:#f9fafb;
                         border-radius:12px;
-                        padding:18px;
+                        border-collapse:collapse;
                     ">
-
-                        <div style="
-                            display:flex;
-                            justify-content:space-between;
-                            margin-bottom:10px;
-                            font-size:14px;
-                        ">
-                            <span style="color:#6b7280">Početak</span>
-                            <span style="font-weight:600">
-                                {format_datetime(pocetak)}
-                            </span>
-                        </div>
-
-                        <div style="
-                            display:flex;
-                            justify-content:space-between;
-                            margin-bottom:10px;
-                            font-size:14px;
-                        ">
-                            <span style="color:#6b7280">Kraj</span>
-                            <span style="font-weight:600">
-                                {format_datetime(kraj)}
-                            </span>
-                        </div>
-
-                        <div style="
-                            display:flex;
-                            justify-content:space-between;
-                            font-size:14px;
-                        ">
-                            <span style="color:#6b7280">Cena</span>
-                            <span style="
+                        <tr>
+                            <td style="
+                                padding:16px 18px 8px;
+                                color:#6b7280;
+                                font-size:14px;
+                            ">Početak</td>
+                            <td style="
+                                padding:16px 18px 8px;
+                                text-align:right;
+                                font-weight:600;
+                                font-size:14px;
+                                color:#111;
+                            ">{format_datetime(pocetak)}</td>
+                        </tr>
+                        <tr>
+                            <td style="
+                                padding:8px 18px;
+                                color:#6b7280;
+                                font-size:14px;
+                            ">Kraj</td>
+                            <td style="
+                                padding:8px 18px;
+                                text-align:right;
+                                font-weight:600;
+                                font-size:14px;
+                                color:#111;
+                            ">{format_datetime(kraj)}</td>
+                        </tr>
+                        <tr>
+                            <td style="
+                                padding:8px 18px 16px;
+                                color:#6b7280;
+                                font-size:14px;
+                            ">Cena</td>
+                            <td style="
+                                padding:8px 18px 16px;
+                                text-align:right;
                                 font-weight:700;
+                                font-size:14px;
                                 color:{color};
-                            ">
-                                {cena} RSD
-                            </span>
-                        </div>
-
-                    </div>
+                            ">{cena} RSD</td>
+                        </tr>
+                    </table>
 
                 </div>
-
             </div>
 
             <!-- FOOTER -->
@@ -232,7 +226,6 @@ def send_session_email(action, client_name, pocetak, kraj, cena):
             </div>
 
         </div>
-
     </div>
     """
 
