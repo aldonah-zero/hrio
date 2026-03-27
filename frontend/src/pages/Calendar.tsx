@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 
 interface Session {
@@ -32,7 +32,7 @@ const MONTHS = [
   "Novembar",
   "Decembar",
 ];
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 8); // 08:00 - 19:00
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 8);
 
 const getMonday = (d: Date) => {
   const date = new Date(d);
@@ -61,6 +61,12 @@ const statusColors: Record<
   default: { bg: "#f3e8ff", border: "#a855f7", text: "#6b21a8" },
 };
 
+interface SesijaKlijent {
+  id: number;
+  sesija_id: number;
+  klijent_id: number;
+}
+
 const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"week" | "month">(
@@ -68,10 +74,16 @@ const Calendar: React.FC = () => {
   );
   const [sessions, setSessions] = useState<Session[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [links, setLinks] = useState<SesijaKlijent[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  // Form state
   const [formData, setFormData] = useState({
     pocetak: "",
     kraj: "",
@@ -82,6 +94,14 @@ const Calendar: React.FC = () => {
 
   const backendBase =
     (import.meta as any).env?.VITE_API_URL || "http://localhost:8000";
+
+  const showToast = useCallback(
+    (message: string, type: "success" | "error" = "success") => {
+      setToast({ message, type });
+      setTimeout(() => setToast(null), 3000);
+    },
+    [],
+  );
 
   const fetchSessions = async () => {
     try {
@@ -101,50 +121,72 @@ const Calendar: React.FC = () => {
     }
   };
 
+  const fetchLinks = async () => {
+    try {
+      const res = await axios.get(`${backendBase}/sesijaklijent/`);
+      setLinks(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Error fetching session-client links:", err);
+    }
+  };
+
   useEffect(() => {
     fetchSessions();
     fetchClients();
+    fetchLinks();
   }, []);
 
-  const weekStart = useMemo(() => getMonday(currentDate), [currentDate]);
-
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return d;
+  // Build a map: sessionId → client name(s)
+  const sessionClientMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    const clientMap: Record<number, Client> = {};
+    clients.forEach((c) => {
+      clientMap[c.id] = c;
     });
-  }, [weekStart]);
+    links.forEach((link) => {
+      const client = clientMap[link.klijent_id];
+      if (client) {
+        const name = `${client.ime} ${client.prezime}`;
+        if (map[link.sesija_id]) {
+          map[link.sesija_id] += `, ${name}`;
+        } else {
+          map[link.sesija_id] = name;
+        }
+      }
+    });
+    return map;
+  }, [links, clients]);
 
-  // Month view helpers
+  const weekStart = useMemo(() => getMonday(currentDate), [currentDate]);
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(d.getDate() + i);
+        return d;
+      }),
+    [weekStart],
+  );
   const monthStart = useMemo(
     () => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1),
     [currentDate],
   );
   const monthDays = useMemo(() => {
     const start = getMonday(monthStart);
-    const days: Date[] = [];
-    for (let i = 0; i < 42; i++) {
+    return Array.from({ length: 42 }, (_, i) => {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
-      days.push(d);
-    }
-    return days;
+      return d;
+    });
   }, [monthStart]);
 
-  const getSessionsForDay = (day: Date) => {
-    return sessions.filter((s) => {
-      const sDate = new Date(s.pocetak);
-      return isSameDay(sDate, day);
-    });
-  };
-
+  const getSessionsForDay = (day: Date) =>
+    sessions.filter((s) => isSameDay(new Date(s.pocetak), day));
   const navigateWeek = (dir: number) => {
     const d = new Date(currentDate);
     d.setDate(d.getDate() + dir * 7);
     setCurrentDate(d);
   };
-
   const navigateMonth = (dir: number) => {
     const d = new Date(currentDate);
     d.setMonth(d.getMonth() + dir);
@@ -153,21 +195,16 @@ const Calendar: React.FC = () => {
 
   const openNewSession = (date?: Date, hour?: number) => {
     const start = date ? new Date(date) : new Date();
-    if (hour !== undefined) {
-      start.setHours(hour, 0, 0, 0);
-    }
+    if (hour !== undefined) start.setHours(hour, 0, 0, 0);
     const end = new Date(start);
     end.setHours(start.getHours() + 1);
-
-    const toLocal = (d: Date) => {
-      const offset = d.getTimezoneOffset();
-      const local = new Date(d.getTime() - offset * 60000);
-      return local.toISOString().slice(0, 16);
-    };
-
+    // Format as "YYYY-MM-DDTHH:MM" using local time components (no UTC conversion)
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const toInput = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     setFormData({
-      pocetak: toLocal(start),
-      kraj: toLocal(end),
+      pocetak: toInput(start),
+      kraj: toInput(end),
       cena: 4000,
       status: "zakazano",
       klijent_id: "",
@@ -177,16 +214,14 @@ const Calendar: React.FC = () => {
   };
 
   const openEditSession = (session: Session) => {
-    const toLocal = (s: string) => {
-      const d = new Date(s);
-      const offset = d.getTimezoneOffset();
-      const local = new Date(d.getTime() - offset * 60000);
-      return local.toISOString().slice(0, 16);
+    // Backend stores local time as-is, just format for datetime-local input (needs "YYYY-MM-DDTHH:MM")
+    const toInputFormat = (s: string) => {
+      // Handle both "2026-03-27T17:00:00" and "2026-03-27 17:00:00" formats
+      return s.replace(" ", "T").slice(0, 16);
     };
-
     setFormData({
-      pocetak: toLocal(session.pocetak),
-      kraj: toLocal(session.kraj),
+      pocetak: toInputFormat(session.pocetak),
+      kraj: toInputFormat(session.kraj),
       cena: session.cena,
       status: session.status,
       klijent_id: "",
@@ -195,63 +230,83 @@ const Calendar: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleSave = async () => {
+  // INSTANT DELETE with animation — no confirm, no save needed
+  const handleDeleteDirect = async (
+    sessionId: number,
+    e?: React.MouseEvent,
+  ) => {
+    if (e) e.stopPropagation();
+    setDeletingId(sessionId);
+    await new Promise((r) => setTimeout(r, 350));
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    setDeletingId(null);
+    if (showModal && selectedSession?.id === sessionId) setShowModal(false);
     try {
-      // Generate a random ID for new sessions
+      await axios.delete(`${backendBase}/sesija/${sessionId}/`);
+      showToast("Sesija obrisana");
+    } catch (err: any) {
+      // 404 or 409 means already deleted — treat as success
+      const status = err?.response?.status;
+      if (status === 404 || status === 409) {
+        showToast("Sesija obrisana");
+      } else {
+        showToast("Greška pri brisanju!", "error");
+        fetchSessions();
+      }
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
       const newId = selectedSession
         ? selectedSession.id
         : Math.floor(Math.random() * 900000) + 100000;
-
+      // Send datetime as-is (local time) — don't convert to UTC with toISOString()
+      // Add ":00" seconds if needed for backend datetime parsing
+      const pocetakStr =
+        formData.pocetak.length === 16
+          ? formData.pocetak + ":00"
+          : formData.pocetak;
+      const krajStr =
+        formData.kraj.length === 16 ? formData.kraj + ":00" : formData.kraj;
       const payload = {
         id: newId,
-        pocetak: new Date(formData.pocetak).toISOString(),
-        kraj: new Date(formData.kraj).toISOString(),
-        cena: formData.cena, // float - price of session
+        pocetak: pocetakStr,
+        kraj: krajStr,
+        cena: formData.cena,
         status: formData.status,
-        uplate: null, // 1:N relationship to Cena table (renamed from 'cena')
-        sesijaklijent_1: null, // 1:N relationship
-        sesijagrupa_1: null, // 1:N relationship
+        uplate: null,
+        sesijaklijent_1: null,
+        sesijagrupa_1: null,
       };
-
       if (selectedSession) {
         await axios.put(
           `${backendBase}/sesija/${selectedSession.id}/`,
           payload,
         );
+        showToast("Sesija ažurirana");
       } else {
         const res = await axios.post(`${backendBase}/sesija/`, payload);
-        // Get the created session ID from response
         const createdId = res.data?.sesija?.id || res.data?.id || newId;
-        // If client selected, create SesijaKlijent link
         if (formData.klijent_id) {
           try {
-            const linkId = Math.floor(Math.random() * 900000) + 100000;
             await axios.post(`${backendBase}/sesijaklijent/`, {
-              id: linkId,
+              id: Math.floor(Math.random() * 900000) + 100000,
               sesija: createdId,
               klijent: parseInt(formData.klijent_id),
             });
-          } catch (linkErr) {
-            console.error("Error linking client to session:", linkErr);
-          }
+          } catch {}
         }
+        showToast("Nova sesija kreirana");
       }
-
       await fetchSessions();
+      await fetchLinks();
       setShowModal(false);
     } catch (err) {
-      console.error("Error saving session:", err);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedSession) return;
-    try {
-      await axios.delete(`${backendBase}/sesija/${selectedSession.id}/`);
-      await fetchSessions();
-      setShowModal(false);
-    } catch (err) {
-      console.error("Error deleting session:", err);
+      showToast("Greška pri čuvanju!", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -259,7 +314,17 @@ const Calendar: React.FC = () => {
 
   return (
     <div className="cal-container">
-      {/* Calendar Header */}
+      {/* Toast */}
+      {toast && (
+        <div className={`cal-toast cal-toast-${toast.type}`}>
+          <span className="cal-toast-icon">
+            {toast.type === "success" ? "✓" : "✕"}
+          </span>
+          {toast.message}
+        </div>
+      )}
+
+      {/* Header */}
       <div className="cal-header">
         <div className="cal-header-left">
           <h1 className="cal-title">Kalendar</h1>
@@ -325,12 +390,11 @@ const Calendar: React.FC = () => {
         </div>
       </div>
 
-      {/* Week View — Desktop grid */}
+      {/* Week View */}
       {view === "week" && (
         <>
-          {/* Desktop/Tablet: time grid */}
+          {/* Desktop grid */}
           <div className="cal-week cal-week-desktop">
-            {/* Time column */}
             <div className="cal-time-col">
               <div className="cal-time-header"></div>
               {HOURS.map((h) => (
@@ -339,12 +403,9 @@ const Calendar: React.FC = () => {
                 </div>
               ))}
             </div>
-
-            {/* Day columns */}
             {weekDays.map((day, dayIdx) => {
               const isToday = isSameDay(day, today);
               const daySessions = getSessionsForDay(day);
-
               return (
                 <div
                   key={dayIdx}
@@ -357,11 +418,9 @@ const Calendar: React.FC = () => {
                     </span>
                   </div>
                   {HOURS.map((h) => {
-                    const hourSessions = daySessions.filter((s) => {
-                      const sHour = new Date(s.pocetak).getHours();
-                      return sHour === h;
-                    });
-
+                    const hourSessions = daySessions.filter(
+                      (s) => new Date(s.pocetak).getHours() === h,
+                    );
                     return (
                       <div
                         key={h}
@@ -373,11 +432,11 @@ const Calendar: React.FC = () => {
                           const end = new Date(s.kraj);
                           const colors =
                             statusColors[s.status] || statusColors.default;
-
+                          const isDeleting = deletingId === s.id;
                           return (
                             <div
                               key={s.id}
-                              className="cal-session-block"
+                              className={`cal-session-block ${isDeleting ? "deleting" : ""}`}
                               style={{
                                 backgroundColor: colors.bg,
                                 borderLeft: `3px solid ${colors.border}`,
@@ -388,12 +447,34 @@ const Calendar: React.FC = () => {
                                 openEditSession(s);
                               }}
                             >
-                              <span className="cal-session-time">
-                                {formatTime(start)} - {formatTime(end)}
-                              </span>
-                              <span className="cal-session-price">
-                                {s.cena.toLocaleString()} RSD
-                              </span>
+                              <div className="cal-session-content">
+                                <span className="cal-session-name">
+                                  {sessionClientMap[s.id] || ""}
+                                </span>
+                                <span className="cal-session-time">
+                                  {formatTime(start)} - {formatTime(end)}
+                                </span>
+                                <span className="cal-session-price">
+                                  {s.cena.toLocaleString()} RSD
+                                </span>
+                              </div>
+                              <button
+                                className="cal-session-delete"
+                                onClick={(e) => handleDeleteDirect(s.id, e)}
+                                title="Obriši"
+                              >
+                                <svg
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="3"
+                                >
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
                             </div>
                           );
                         })}
@@ -405,12 +486,11 @@ const Calendar: React.FC = () => {
             })}
           </div>
 
-          {/* Mobile: agenda list */}
+          {/* Mobile agenda */}
           <div className="cal-week-mobile">
             {weekDays.map((day, dayIdx) => {
               const isToday = isSameDay(day, today);
               const daySessions = getSessionsForDay(day);
-
               return (
                 <div
                   key={dayIdx}
@@ -434,11 +514,10 @@ const Calendar: React.FC = () => {
                         const end = new Date(s.kraj);
                         const colors =
                           statusColors[s.status] || statusColors.default;
-
                         return (
                           <div
                             key={s.id}
-                            className="cal-agenda-item"
+                            className={`cal-agenda-item ${deletingId === s.id ? "deleting" : ""}`}
                             style={{
                               backgroundColor: colors.bg,
                               borderLeft: `3px solid ${colors.border}`,
@@ -449,15 +528,33 @@ const Calendar: React.FC = () => {
                               openEditSession(s);
                             }}
                           >
+                            {sessionClientMap[s.id] && (
+                              <span className="cal-agenda-item-name">
+                                {sessionClientMap[s.id]}
+                              </span>
+                            )}
                             <span className="cal-agenda-item-time">
-                              {formatTime(start)} - {formatTime(end)}
+                              {formatTime(start)}-{formatTime(end)}
                             </span>
                             <span className="cal-agenda-item-price">
                               {s.cena.toLocaleString()} RSD
                             </span>
-                            <span className="cal-agenda-item-status">
-                              {s.status}
-                            </span>
+                            <button
+                              className="cal-agenda-item-delete"
+                              onClick={(e) => handleDeleteDirect(s.id, e)}
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                              >
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
                           </div>
                         );
                       })
@@ -485,7 +582,6 @@ const Calendar: React.FC = () => {
               const isCurrentMonth = day.getMonth() === currentDate.getMonth();
               const isToday = isSameDay(day, today);
               const daySessions = getSessionsForDay(day);
-
               return (
                 <div
                   key={i}
@@ -502,13 +598,13 @@ const Calendar: React.FC = () => {
                       return (
                         <div
                           key={s.id}
-                          className="cal-month-session-dot"
+                          className={`cal-month-session-dot ${deletingId === s.id ? "deleting" : ""}`}
                           style={{ backgroundColor: colors.border }}
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditSession(s);
                           }}
-                          title={`${formatTime(new Date(s.pocetak))} - ${s.cena} RSD`}
+                          title={`${sessionClientMap[s.id] ? sessionClientMap[s.id] + " — " : ""}${formatTime(new Date(s.pocetak))} - ${s.cena} RSD`}
                         />
                       );
                     })}
@@ -525,7 +621,7 @@ const Calendar: React.FC = () => {
         </div>
       )}
 
-      {/* Session Legend */}
+      {/* Legend */}
       <div className="cal-legend">
         {Object.entries(statusColors)
           .filter(([k]) => k !== "default")
@@ -553,7 +649,6 @@ const Calendar: React.FC = () => {
                 ✕
               </button>
             </div>
-
             <div className="cal-modal-body">
               <div className="cal-form-group">
                 <label>Početak</label>
@@ -600,7 +695,6 @@ const Calendar: React.FC = () => {
                   </select>
                 </div>
               </div>
-
               {!selectedSession && (
                 <div className="cal-form-group">
                   <label>Klijent (opciono)</label>
@@ -620,13 +714,23 @@ const Calendar: React.FC = () => {
                 </div>
               )}
             </div>
-
             <div className="cal-modal-footer">
               {selectedSession && (
                 <button
                   className="cal-btn cal-btn-danger"
-                  onClick={handleDelete}
+                  onClick={() => handleDeleteDirect(selectedSession.id)}
                 >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m5 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  </svg>
                   Obriši
                 </button>
               )}
@@ -637,8 +741,12 @@ const Calendar: React.FC = () => {
               >
                 Otkaži
               </button>
-              <button className="cal-btn cal-btn-primary" onClick={handleSave}>
-                Sačuvaj
+              <button
+                className={`cal-btn cal-btn-primary ${saving ? "saving" : ""}`}
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Čuvam..." : "Sačuvaj"}
               </button>
             </div>
           </div>

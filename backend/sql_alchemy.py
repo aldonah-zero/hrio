@@ -77,16 +77,17 @@ SesijaKlijent.sesija: Mapped["Sesija"] = relationship("Sesija", back_populates="
 
 #--- Relationships of the sesija table
 # FIXED: renamed from 'cena' to 'uplate' to avoid conflict with Sesija.cena float column
-Sesija.uplate: Mapped[List["Cena"]] = relationship("Cena", back_populates="sesija_2", foreign_keys=[Cena.sesija_2_id])
-Sesija.sesijaklijent_1: Mapped[List["SesijaKlijent"]] = relationship("SesijaKlijent", back_populates="sesija", foreign_keys=[SesijaKlijent.sesija_id])
-Sesija.sesijagrupa_1: Mapped[List["SesijaGrupa"]] = relationship("SesijaGrupa", back_populates="sesija_1", foreign_keys=[SesijaGrupa.sesija_1_id])
+# FIXED: added cascade delete so deleting a session also deletes linked records
+Sesija.uplate: Mapped[List["Cena"]] = relationship("Cena", back_populates="sesija_2", foreign_keys=[Cena.sesija_2_id], cascade="all, delete-orphan")
+Sesija.sesijaklijent_1: Mapped[List["SesijaKlijent"]] = relationship("SesijaKlijent", back_populates="sesija", foreign_keys=[SesijaKlijent.sesija_id], cascade="all, delete-orphan")
+Sesija.sesijagrupa_1: Mapped[List["SesijaGrupa"]] = relationship("SesijaGrupa", back_populates="sesija_1", foreign_keys=[SesijaGrupa.sesija_1_id], cascade="all, delete-orphan")
 
 #--- Relationships of the grupa table
-Grupa.sesijagrupa: Mapped[List["SesijaGrupa"]] = relationship("SesijaGrupa", back_populates="grupa", foreign_keys=[SesijaGrupa.grupa_id])
+Grupa.sesijagrupa: Mapped[List["SesijaGrupa"]] = relationship("SesijaGrupa", back_populates="grupa", foreign_keys=[SesijaGrupa.grupa_id], cascade="all, delete-orphan")
 
 #--- Relationships of the klijent table
-Klijent.sesijaklijent: Mapped[List["SesijaKlijent"]] = relationship("SesijaKlijent", back_populates="klijent", foreign_keys=[SesijaKlijent.klijent_id])
-Klijent.cena_1: Mapped[List["Cena"]] = relationship("Cena", back_populates="klijent_1", foreign_keys=[Cena.klijent_1_id])
+Klijent.sesijaklijent: Mapped[List["SesijaKlijent"]] = relationship("SesijaKlijent", back_populates="klijent", foreign_keys=[SesijaKlijent.klijent_id], cascade="all, delete-orphan")
+Klijent.cena_1: Mapped[List["Cena"]] = relationship("Cena", back_populates="klijent_1", foreign_keys=[Cena.klijent_1_id], cascade="all, delete-orphan")
 
 # Database connection
 DATABASE_URL = "sqlite:///Class_Diagram.db"  # SQLite connection

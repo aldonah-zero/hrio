@@ -484,8 +484,7 @@ async def delete_cena(cena_id: int, database: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Cena not found")
     database.delete(db_cena)
     database.commit()
-    return db_cena
-
+    return {"message": "Deleted", "id": cena_id}
 
 
 
@@ -698,8 +697,7 @@ async def delete_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(ge
         raise HTTPException(status_code=404, detail="SesijaGrupa not found")
     database.delete(db_sesijagrupa)
     database.commit()
-    return db_sesijagrupa
-
+    return {"message": "Deleted", "id": sesijagrupa_id}
 
 
 
@@ -912,8 +910,7 @@ async def delete_sesijaklijent(sesijaklijent_id: int, database: Session = Depend
         raise HTTPException(status_code=404, detail="SesijaKlijent not found")
     database.delete(db_sesijaklijent)
     database.commit()
-    return db_sesijaklijent
-
+    return {"message": "Deleted", "id": sesijaklijent_id}
 
 
 
@@ -1229,8 +1226,8 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
     if db_sesija is None:
         raise HTTPException(status_code=404, detail="Sesija not found")
     database.delete(db_sesija)
-    database.commit()
-    return db_sesija
+    database.commit()  # <-- DODAJ
+    return {"message": "Deleted", "id": sesija_id}
 
 
 
@@ -1468,7 +1465,7 @@ async def delete_grupa(grupa_id: int, database: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Grupa not found")
     database.delete(db_grupa)
     database.commit()
-    return db_grupa
+    return {"message": "Deleted", "id": grupa_id}
 
 
 
@@ -1747,7 +1744,7 @@ async def delete_klijent(klijent_id: int, database: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Klijent not found")
     database.delete(db_klijent)
     database.commit()
-    return db_klijent
+    return {"message": "Deleted", "id": klijent_id}
 
 
 

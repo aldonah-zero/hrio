@@ -555,6 +555,14 @@ body {
   font-size: 11px;
 }
 
+.cal-session-name {
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cal-session-price {
   font-size: 10px;
   opacity: 0.8;
@@ -847,6 +855,189 @@ body {
 }
 
 /* ============================
+   TOAST NOTIFICATION
+   ============================ */
+.cal-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  animation: toastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1), toastOut 0.3s ease 2.7s forwards;
+  backdrop-filter: blur(8px);
+}
+
+.cal-toast-success {
+  background: #059669;
+  color: #ffffff;
+}
+
+.cal-toast-error {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.cal-toast-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to { opacity: 0; transform: translateX(40px) scale(0.95); }
+}
+
+/* ============================
+   DELETE ANIMATION
+   ============================ */
+.cal-session-block.deleting,
+.cal-agenda-item.deleting,
+.cal-month-session-dot.deleting {
+  animation: deleteSlide 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes deleteSlide {
+  0% { opacity: 1; transform: scale(1); }
+  30% { opacity: 0.8; transform: scale(1.03); background: #fee2e2 !important; }
+  100% { opacity: 0; transform: scale(0.7) translateX(20px); height: 0; padding: 0; margin: 0; overflow: hidden; }
+}
+
+/* ============================
+   INLINE DELETE BUTTON (desktop week)
+   ============================ */
+.cal-session-block {
+  position: relative;
+}
+
+.cal-session-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cal-session-delete {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s;
+  color: inherit;
+  padding: 0;
+}
+
+.cal-session-block:hover .cal-session-delete {
+  opacity: 1;
+}
+
+.cal-session-delete:hover {
+  background: #ef4444;
+  color: white;
+  transform: scale(1.15);
+}
+
+/* ============================
+   INLINE DELETE BUTTON (mobile agenda)
+   ============================ */
+.cal-agenda-item {
+  position: relative;
+}
+
+.cal-agenda-item-delete {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.cal-agenda-item-delete:hover {
+  background: #ef4444;
+  color: white;
+  transform: scale(1.1);
+}
+
+/* ============================
+   SAVING BUTTON ANIMATION
+   ============================ */
+.cal-btn-primary.saving {
+  opacity: 0.7;
+  pointer-events: none;
+  position: relative;
+}
+
+.cal-btn-primary.saving::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================
+   DANGER BUTTON WITH ICON
+   ============================ */
+.cal-btn-danger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-btn-danger:hover {
+  background: #fecaca;
+  transform: scale(1.02);
+}
+
+/* ============================
    RESPONSIVE — TABLET (1024px)
    ============================ */
 @media (max-width: 1024px) {
@@ -1111,6 +1302,15 @@ body {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   }
 
+  .cal-agenda-item-name {
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+  }
+
   .cal-agenda-item-time {
     font-size: 13px;
     font-weight: 600;
@@ -1248,6 +1448,15 @@ body {
 
   .cal-btn-danger {
     flex: 0 0 auto;
+  }
+
+  /* Toast on mobile */
+  .cal-toast {
+    top: 64px;
+    right: 12px;
+    left: 12px;
+    font-size: 13px;
+    padding: 12px 16px;
   }
 }
 
