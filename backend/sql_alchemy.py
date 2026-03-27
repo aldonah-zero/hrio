@@ -64,7 +64,7 @@ class Klijent(Base):
 
 
 #--- Relationships of the cena table
-Cena.sesija_2: Mapped["Sesija"] = relationship("Sesija", back_populates="cena", foreign_keys=[Cena.sesija_2_id])
+Cena.sesija_2: Mapped["Sesija"] = relationship("Sesija", back_populates="uplate", foreign_keys=[Cena.sesija_2_id])
 Cena.klijent_1: Mapped["Klijent"] = relationship("Klijent", back_populates="cena_1", foreign_keys=[Cena.klijent_1_id])
 
 #--- Relationships of the sesijagrupa table
@@ -76,7 +76,8 @@ SesijaKlijent.klijent: Mapped["Klijent"] = relationship("Klijent", back_populate
 SesijaKlijent.sesija: Mapped["Sesija"] = relationship("Sesija", back_populates="sesijaklijent_1", foreign_keys=[SesijaKlijent.sesija_id])
 
 #--- Relationships of the sesija table
-Sesija.cena: Mapped[List["Cena"]] = relationship("Cena", back_populates="sesija_2", foreign_keys=[Cena.sesija_2_id])
+# FIXED: renamed from 'cena' to 'uplate' to avoid conflict with Sesija.cena float column
+Sesija.uplate: Mapped[List["Cena"]] = relationship("Cena", back_populates="sesija_2", foreign_keys=[Cena.sesija_2_id])
 Sesija.sesijaklijent_1: Mapped[List["SesijaKlijent"]] = relationship("SesijaKlijent", back_populates="sesija", foreign_keys=[SesijaKlijent.sesija_id])
 Sesija.sesijagrupa_1: Mapped[List["SesijaGrupa"]] = relationship("SesijaGrupa", back_populates="sesija_1", foreign_keys=[SesijaGrupa.sesija_1_id])
 

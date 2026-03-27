@@ -1035,27 +1035,25 @@ async def get_sesija(sesija_id: int, database: Session = Depends(get_db)) -> Ses
     return response_data
 
 
-
 @app.post("/sesija/", response_model=None, tags=["Sesija"])
 async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(get_db)) -> Sesija:
-
-
     db_sesija = Sesija(
-        cena=sesija_data.cena,        status=sesija_data.status,        id=sesija_data.id,        pocetak=sesija_data.pocetak,        kraj=sesija_data.kraj        )
+        cena=sesija_data.cena, status=sesija_data.status, id=sesija_data.id, pocetak=sesija_data.pocetak,
+        kraj=sesija_data.kraj)
 
     database.add(db_sesija)
     database.commit()
     database.refresh(db_sesija)
 
-    if sesija_data.cena:
+    if sesija_data.uplate:
         # Validate that all Cena IDs exist
-        for cena_id in sesija_data.cena:
+        for cena_id in sesija_data.uplate:
             db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
             if not db_cena:
                 raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
 
         # Update the related entities with the new foreign key
-        database.query(Cena).filter(Cena.id.in_(sesija_data.cena)).update(
+        database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update(
             {Cena.sesija_2_id: db_sesija.id}, synchronize_session=False
         )
         database.commit()
@@ -1084,14 +1082,13 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
         )
         database.commit()
 
-
-
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
     response_data = {
         "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids],        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]    }
+        "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
+        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
     return response_data
 
 
@@ -1106,7 +1103,7 @@ async def bulk_create_sesija(items: list[SesijaCreate], database: Session = Depe
             # Basic validation for each item
 
             db_sesija = Sesija(
-                cena=item_data.cena,                status=item_data.status,                id=item_data.id,                pocetak=item_data.pocetak,                kraj=item_data.kraj            )
+                cena=item_data.cena_vrednost,               status=item_data.status,                id=item_data.id,                pocetak=item_data.pocetak,                kraj=item_data.kraj            )
             database.add(db_sesija)
             database.flush()  # Get ID without committing
             created_items.append(db_sesija.id)
@@ -1147,6 +1144,7 @@ async def bulk_delete_sesija(ids: list[int], database: Session = Depends(get_db)
         "message": f"Successfully deleted {deleted_count} Sesija entities"
     }
 
+
 @app.put("/sesija/{sesija_id}/", response_model=None, tags=["Sesija"])
 async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Session = Depends(get_db)) -> Sesija:
     db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
@@ -1158,22 +1156,22 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
     setattr(db_sesija, 'id', sesija_data.id)
     setattr(db_sesija, 'pocetak', sesija_data.pocetak)
     setattr(db_sesija, 'kraj', sesija_data.kraj)
-    if sesija_data.cena is not None:
+    if sesija_data.uplate is not None:
         # Clear all existing relationships (set foreign key to NULL)
         database.query(Cena).filter(Cena.sesija_2_id == db_sesija.id).update(
             {Cena.sesija_2_id: None}, synchronize_session=False
         )
 
         # Set new relationships if list is not empty
-        if sesija_data.cena:
+        if sesija_data.uplate:
             # Validate that all IDs exist
-            for cena_id in sesija_data.cena:
+            for cena_id in sesija_data.uplate:
                 db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
                 if not db_cena:
                     raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
 
             # Update the related entities with the new foreign key
-            database.query(Cena).filter(Cena.id.in_(sesija_data.cena)).update(
+            database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update(
                 {Cena.sesija_2_id: db_sesija.id}, synchronize_session=False
             )
     if sesija_data.sesijaklijent_1 is not None:
@@ -1220,7 +1218,8 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
     response_data = {
         "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids],        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]    }
+        "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
+        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
     return response_data
 
 

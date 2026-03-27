@@ -34,14 +34,14 @@ class SesijaKlijentCreate(BaseModel):
 
 
 class SesijaCreate(BaseModel):
-    cena: float
+    cena: float                                      # float column - price of session
     status: str
     id: int
     pocetak: datetime
     kraj: datetime
-    cena: Optional[List[int]] = None  # 1:N Relationship
-    sesijaklijent_1: Optional[List[int]] = None  # 1:N Relationship
-    sesijagrupa_1: Optional[List[int]] = None  # 1:N Relationship
+    uplate: Optional[List[int]] = None               # FIXED: was 'cena' (conflict!), now 'uplate' - 1:N Relationship to Cena
+    sesijaklijent_1: Optional[List[int]] = None      # 1:N Relationship
+    sesijagrupa_1: Optional[List[int]] = None        # 1:N Relationship
 
 
 class GrupaCreate(BaseModel):
@@ -60,5 +60,3 @@ class KlijentCreate(BaseModel):
     broj_telefona: str
     sesijaklijent: Optional[List[int]] = None  # 1:N Relationship
     cena_1: Optional[List[int]] = None  # 1:N Relationship
-
-
