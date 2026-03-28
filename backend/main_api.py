@@ -26,21 +26,32 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 ############################################
 
 def init_db():
-    SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/Class_Diagram.db")
-    # Ensure local SQLite directory exists (safe no-op for other DBs)
-    os.makedirs("data", exist_ok=True)
-    engine = create_engine(
-        SQLALCHEMY_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,
-        echo=False
-    )
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.create_all(bind=engine)
-    return SessionLocal
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/Class_Diagram.db")
 
+    # ensure sqlite folder exists
+    if DATABASE_URL.startswith("sqlite"):
+        os.makedirs("data", exist_ok=True)
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False}
+        )
+    else:
+        engine = create_engine(
+            DATABASE_URL,
+            pool_size=10,
+            max_overflow=20,
+            pool_pre_ping=True
+        )
+
+    SessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=engine
+    )
+
+    Base.metadata.create_all(bind=engine)
+
+    return SessionLocal
 app = FastAPI(
     title="Class_Diagram API",
     description="Auto-generated REST API with full CRUD operations, relationship management, and advanced features",
