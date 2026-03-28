@@ -1147,57 +1147,68 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
     database.add(db_sesija)
     database.commit()
     database.refresh(db_sesija)
-    send_session_email(
-        action="created",
-        client_name=f"Igor Pavlov",
-        pocetak=db_sesija.pocetak,
-        kraj=db_sesija.kraj,
-        cena=db_sesija.cena
-    )
+
     if sesija_data.uplate:
-        # Validate that all Cena IDs exist
         for cena_id in sesija_data.uplate:
             db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
             if not db_cena:
                 raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-
-        # Update the related entities with the new foreign key
         database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update(
             {Cena.sesija_2_id: db_sesija.id}, synchronize_session=False
         )
         database.commit()
+
     if sesija_data.sesijaklijent_1:
-        # Validate that all SesijaKlijent IDs exist
         for sesijaklijent_id in sesija_data.sesijaklijent_1:
             db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
             if not db_sesijaklijent:
                 raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-
-        # Update the related entities with the new foreign key
         database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(sesija_data.sesijaklijent_1)).update(
             {SesijaKlijent.sesija_id: db_sesija.id}, synchronize_session=False
         )
         database.commit()
+
     if sesija_data.sesijagrupa_1:
-        # Validate that all SesijaGrupa IDs exist
         for sesijagrupa_id in sesija_data.sesijagrupa_1:
             db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
             if not db_sesijagrupa:
                 raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-
-        # Update the related entities with the new foreign key
         database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(sesija_data.sesijagrupa_1)).update(
             {SesijaGrupa.sesija_1_id: db_sesija.id}, synchronize_session=False
         )
         database.commit()
+
+    # Get client info for email
+    client_name = "Klijent"
+    client_email = None
+    sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
+    if sk and sk.klijent_id:
+        klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+        if klijent:
+            client_name = f"{klijent.ime} {klijent.prezime}"
+            client_email = klijent.email
+
+    try:
+        send_session_email(
+            action="created",
+            client_name=client_name,
+            pocetak=db_sesija.pocetak,
+            kraj=db_sesija.kraj,
+            cena=db_sesija.cena,
+            client_email=client_email
+        )
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
 
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
     response_data = {
         "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
-        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
+        "cena_ids": [x[0] for x in cena_ids],
+        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
+        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
+    }
     return response_data
 
 
