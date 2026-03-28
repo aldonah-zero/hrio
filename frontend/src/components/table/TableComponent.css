@@ -446,41 +446,7 @@
   .table-modal-overlay {
     align-items: flex-start;
     padding: 0;
-    padding-top: 48px;
-  }
-
-  .table-modal-box {
-    width: 100%;
-    max-width: 100%;
-    border-radius: 0 0 20px 20px;
-    max-height: calc(100vh - 48px);
-    animation: tmSheetDown2 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .table-modal-box.closing {
-    animation: tmSheetUp2 0.25s ease forwards;
-  }
-
-  @keyframes tmSheetDown2 {
-    from {
-      opacity: 0;
-      transform: translateY(-100%);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes tmSheetUp2 {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(-100%);
-    }
+    padding-top: 8vh;
   }
   .table-modal-box {
     width: 100%;

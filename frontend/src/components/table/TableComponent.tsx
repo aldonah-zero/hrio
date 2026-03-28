@@ -24,9 +24,40 @@ interface TableOptions {
   stripedRows?: boolean;
   showPagination?: boolean;
   rowsPerPage?: number;
-  columns?: Array<{ field: string; label?: string; type?: string; column_type?: string; path?: string } | string>;
-  formColumns?: Array<{ field: string; label?: string; type?: string; column_type?: string; path?: string; lookup_field?: string; lookupField?: string } | string>;
-  form_columns?: Array<{ field: string; label?: string; type?: string; column_type?: string; path?: string; lookup_field?: string; lookupField?: string } | string>;
+  columns?: Array<
+    | {
+        field: string;
+        label?: string;
+        type?: string;
+        column_type?: string;
+        path?: string;
+      }
+    | string
+  >;
+  formColumns?: Array<
+    | {
+        field: string;
+        label?: string;
+        type?: string;
+        column_type?: string;
+        path?: string;
+        lookup_field?: string;
+        lookupField?: string;
+      }
+    | string
+  >;
+  form_columns?: Array<
+    | {
+        field: string;
+        label?: string;
+        type?: string;
+        column_type?: string;
+        path?: string;
+        lookup_field?: string;
+        lookupField?: string;
+      }
+    | string
+  >;
 }
 
 interface Props {
@@ -67,7 +98,7 @@ const formatCellValue = (value: any): string => {
 };
 
 const getNestedValue = (obj: any, path: string): any => {
-  return path.split('.').reduce((current, key) => current?.[key], obj);
+  return path.split(".").reduce((current, key) => current?.[key], obj);
 };
 
 export const TableComponent: React.FC<Props> = ({
@@ -81,8 +112,13 @@ export const TableComponent: React.FC<Props> = ({
   const [tableData, setTableData] = useState<any[]>(data ?? []);
   const { setSelectedRow, registerTableRefresh } = useTableContext();
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
-  const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' } | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>(
+    {},
+  );
+  const [sortConfig, setSortConfig] = useState<{
+    field: string;
+    direction: "asc" | "desc";
+  } | null>(null);
 
   const fetchTableData = async () => {
     const endpoint = dataBinding?.endpoint
@@ -96,10 +132,10 @@ export const TableComponent: React.FC<Props> = ({
     const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
     const hasLookupColumns = options?.columns?.some(
-      (col: any) => typeof col === 'object' && col.column_type === 'lookup'
+      (col: any) => typeof col === "object" && col.column_type === "lookup",
     );
 
-    const urlParams = hasLookupColumns ? '?detailed=true' : '';
+    const urlParams = hasLookupColumns ? "?detailed=true" : "";
     const url = endpoint.startsWith("/")
       ? backendBase + endpoint + urlParams
       : endpoint + urlParams;
@@ -109,7 +145,11 @@ export const TableComponent: React.FC<Props> = ({
       if (Array.isArray(response.data)) {
         setTableData(response.data);
       } else if (response.data && typeof response.data === "object") {
-        setTableData(Array.isArray(response.data.results) ? response.data.results : [response.data]);
+        setTableData(
+          Array.isArray(response.data.results)
+            ? response.data.results
+            : [response.data],
+        );
       }
     } catch (err) {
       console.error("Error fetching table data:", err);
@@ -134,8 +174,12 @@ export const TableComponent: React.FC<Props> = ({
     showPagination: options?.showPagination ?? true,
     rowsPerPage: options?.rowsPerPage ?? 5,
     columns: options?.columns ?? [],
-    formColumns: (options as any)?.formColumns ?? (options as any)?.form_columns ?? [],
-    actionButtons: (options as any)?.actionButtons ?? (options as any)?.["action-buttons"] ?? false,
+    formColumns:
+      (options as any)?.formColumns ?? (options as any)?.form_columns ?? [],
+    actionButtons:
+      (options as any)?.actionButtons ??
+      (options as any)?.["action-buttons"] ??
+      false,
   };
 
   const normalizeOptionColumns = (rawColumns: any[]): TableColumn[] => {
@@ -143,18 +187,34 @@ export const TableComponent: React.FC<Props> = ({
       return [];
     }
     return rawColumns
-      .filter((col): col is { field: string; label?: string; type?: string; column_type?: string; path?: string; entity?: string; options?: string[]; required?: boolean; lookup_field?: string; lookupField?: string } | string => Boolean(col))
+      .filter(
+        (
+          col,
+        ): col is
+          | {
+              field: string;
+              label?: string;
+              type?: string;
+              column_type?: string;
+              path?: string;
+              entity?: string;
+              options?: string[];
+              required?: boolean;
+              lookup_field?: string;
+              lookupField?: string;
+            }
+          | string => Boolean(col),
+      )
       .map((col) => {
         if (typeof col === "string") {
           return { field: col, label: humanize(col), type: "string" };
         }
-        const actualField = col.column_type === "lookup" && col.path
-          ? col.path
-          : col.field;
-        const relationshipKey = col.column_type === "lookup" && col.path
-          ? col.path
-          : undefined;
-        const lookupField = (col as any).lookup_field ?? (col as any).lookupField ?? col.field;
+        const actualField =
+          col.column_type === "lookup" && col.path ? col.path : col.field;
+        const relationshipKey =
+          col.column_type === "lookup" && col.path ? col.path : undefined;
+        const lookupField =
+          (col as any).lookup_field ?? (col as any).lookupField ?? col.field;
         return {
           field: actualField,
           label: humanize(col.label || col.field),
@@ -210,7 +270,9 @@ export const TableComponent: React.FC<Props> = ({
   }, [normalizedRows, resolvedOptions.columns]);
 
   const formColumns: TableColumn[] = useMemo(() => {
-    const normalizedFormColumns = normalizeOptionColumns(resolvedOptions.formColumns ?? []);
+    const normalizedFormColumns = normalizeOptionColumns(
+      resolvedOptions.formColumns ?? [],
+    );
     return normalizedFormColumns.length > 0 ? normalizedFormColumns : columns;
   }, [columns, resolvedOptions.formColumns]);
 
@@ -223,26 +285,32 @@ export const TableComponent: React.FC<Props> = ({
       return Object.entries(columnFilters).every(([field, filterValue]) => {
         if (!filterValue) return true;
 
-        const column = columns.find(col => col.field === field);
+        const column = columns.find((col) => col.field === field);
         let cellValue;
 
-        if (column?.columnType === 'lookup' && column.lookupField) {
-          if (column.type === 'list') {
+        if (column?.columnType === "lookup" && column.lookupField) {
+          if (column.type === "list") {
             const relatedArray = row[column.field];
             if (Array.isArray(relatedArray)) {
               cellValue = relatedArray
-                .map(item => item[column.lookupField!])
-                .filter(val => val !== null && val !== undefined)
-                .join(', ');
+                .map((item) => item[column.lookupField!])
+                .filter((val) => val !== null && val !== undefined)
+                .join(", ");
             } else {
-              cellValue = '';
+              cellValue = "";
             }
           } else {
             if (column.relationshipKey) {
-              cellValue = getNestedValue(row, `${column.relationshipKey}.${column.lookupField}`);
+              cellValue = getNestedValue(
+                row,
+                `${column.relationshipKey}.${column.lookupField}`,
+              );
             }
             if (!cellValue) {
-              cellValue = getNestedValue(row, `${column.field}.${column.lookupField}`);
+              cellValue = getNestedValue(
+                row,
+                `${column.field}.${column.lookupField}`,
+              );
             }
           }
         } else {
@@ -250,10 +318,14 @@ export const TableComponent: React.FC<Props> = ({
         }
 
         if (filterValue === "empty") {
-          return cellValue === null || cellValue === undefined || cellValue === "";
+          return (
+            cellValue === null || cellValue === undefined || cellValue === ""
+          );
         }
         if (filterValue === "not_empty") {
-          return cellValue !== null && cellValue !== undefined && cellValue !== "";
+          return (
+            cellValue !== null && cellValue !== undefined && cellValue !== ""
+          );
         }
 
         const parts = filterValue.split(":");
@@ -261,7 +333,9 @@ export const TableComponent: React.FC<Props> = ({
         const searchValue = parts.slice(1).join(":");
 
         if (!searchValue && operator !== "empty" && operator !== "not_empty") {
-          return String(cellValue || "").toLowerCase().includes(filterValue.toLowerCase());
+          return String(cellValue || "")
+            .toLowerCase()
+            .includes(filterValue.toLowerCase());
         }
 
         if (cellValue === null || cellValue === undefined) {
@@ -292,12 +366,18 @@ export const TableComponent: React.FC<Props> = ({
         const searchDate = new Date(searchValue);
 
         if (!isNaN(cellDate.getTime()) && !isNaN(searchDate.getTime())) {
-          if (operator === "eq") return cellDate.getTime() === searchDate.getTime();
-          if (operator === "ne") return cellDate.getTime() !== searchDate.getTime();
-          if (operator === "gt") return cellDate.getTime() > searchDate.getTime();
-          if (operator === "gte") return cellDate.getTime() >= searchDate.getTime();
-          if (operator === "lt") return cellDate.getTime() < searchDate.getTime();
-          if (operator === "lte") return cellDate.getTime() <= searchDate.getTime();
+          if (operator === "eq")
+            return cellDate.getTime() === searchDate.getTime();
+          if (operator === "ne")
+            return cellDate.getTime() !== searchDate.getTime();
+          if (operator === "gt")
+            return cellDate.getTime() > searchDate.getTime();
+          if (operator === "gte")
+            return cellDate.getTime() >= searchDate.getTime();
+          if (operator === "lt")
+            return cellDate.getTime() < searchDate.getTime();
+          if (operator === "lte")
+            return cellDate.getTime() <= searchDate.getTime();
         }
 
         if (operator === "eq") return cellStr === searchStr;
@@ -327,10 +407,10 @@ export const TableComponent: React.FC<Props> = ({
   const handleSortChange = (field: string) => {
     setSortConfig((prev) => {
       if (!prev || prev.field !== field) {
-        return { field, direction: 'asc' };
+        return { field, direction: "asc" };
       }
-      if (prev.direction === 'asc') {
-        return { field, direction: 'desc' };
+      if (prev.direction === "asc") {
+        return { field, direction: "desc" };
       }
       return null;
     });
@@ -352,13 +432,13 @@ export const TableComponent: React.FC<Props> = ({
       const bNum = Number(bValue);
 
       if (!isNaN(aNum) && !isNaN(bNum)) {
-        return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+        return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
       }
 
       const aDate = new Date(aValue);
       const bDate = new Date(bValue);
       if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
-        return sortConfig.direction === 'asc'
+        return sortConfig.direction === "asc"
           ? aDate.getTime() - bDate.getTime()
           : bDate.getTime() - aDate.getTime();
       }
@@ -366,7 +446,7 @@ export const TableComponent: React.FC<Props> = ({
       const aStr = String(aValue).toLowerCase();
       const bStr = String(bValue).toLowerCase();
 
-      if (sortConfig.direction === 'asc') {
+      if (sortConfig.direction === "asc") {
         return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
       } else {
         return bStr < aStr ? -1 : bStr > aStr ? 1 : 0;
@@ -380,13 +460,13 @@ export const TableComponent: React.FC<Props> = ({
     1,
     Number.isFinite(Number(resolvedOptions.rowsPerPage))
       ? Number(resolvedOptions.rowsPerPage)
-      : 5
+      : 5,
   );
 
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editRowData, setEditRowData] = useState<any>(null);
   const [lookupOptions, setLookupOptions] = useState<Record<string, any[]>>({});
   const [validationError, setValidationError] = useState<string>("");
@@ -423,13 +503,16 @@ export const TableComponent: React.FC<Props> = ({
     if (showModal) {
       setValidationError("");
       const initialValues: Record<string, any> = {};
-      formColumns.forEach(col => {
-        if (modalMode === 'edit' && editRowData) {
-          if (col.columnType === 'lookup') {
-            if (col.type === 'list') {
-              const relatedArray = editRowData[col.relationshipKey || col.field];
+      formColumns.forEach((col) => {
+        if (modalMode === "edit" && editRowData) {
+          if (col.columnType === "lookup") {
+            if (col.type === "list") {
+              const relatedArray =
+                editRowData[col.relationshipKey || col.field];
               if (Array.isArray(relatedArray)) {
-                initialValues[col.field] = relatedArray.map((item: any) => String(item.id));
+                initialValues[col.field] = relatedArray.map((item: any) =>
+                  String(item.id),
+                );
               } else {
                 initialValues[col.field] = [];
               }
@@ -440,14 +523,16 @@ export const TableComponent: React.FC<Props> = ({
             }
           } else {
             const value = editRowData[col.field];
-            if (col.type === 'list') {
-              initialValues[col.field] = Array.isArray(value) ? value.join(', ') : (value ?? "");
+            if (col.type === "list") {
+              initialValues[col.field] = Array.isArray(value)
+                ? value.join(", ")
+                : (value ?? "");
             } else {
               initialValues[col.field] = value ?? "";
             }
           }
         } else {
-          if (col.columnType === 'lookup' && col.type === 'list') {
+          if (col.columnType === "lookup" && col.type === "list") {
             initialValues[col.field] = [];
           } else {
             initialValues[col.field] = "";
@@ -458,17 +543,20 @@ export const TableComponent: React.FC<Props> = ({
 
       const fetchLookupOptions = async () => {
         const options: Record<string, any[]> = {};
-        const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        const backendBase =
+          import.meta.env.VITE_API_URL || "http://localhost:8000";
 
         for (const col of formColumns) {
-          if (col.columnType === 'lookup' && col.entity) {
+          if (col.columnType === "lookup" && col.entity) {
             const endpoint = col.entity.toLowerCase();
             try {
               const response = await axios.get(`${backendBase}/${endpoint}/`);
               if (Array.isArray(response.data)) {
                 options[endpoint] = response.data;
-              } else if (response.data && typeof response.data === 'object') {
-                options[endpoint] = Array.isArray(response.data.results) ? response.data.results : [response.data];
+              } else if (response.data && typeof response.data === "object") {
+                options[endpoint] = Array.isArray(response.data.results)
+                  ? response.data.results
+                  : [response.data];
               }
             } catch (err) {
               console.error(`Error fetching ${endpoint} options:`, err);
@@ -493,7 +581,12 @@ export const TableComponent: React.FC<Props> = ({
     }
     const start = (currentPage - 1) * pageSize;
     return sortedAndFilteredRows.slice(start, start + pageSize);
-  }, [currentPage, sortedAndFilteredRows, pageSize, resolvedOptions.showPagination]);
+  }, [
+    currentPage,
+    sortedAndFilteredRows,
+    pageSize,
+    resolvedOptions.showPagination,
+  ]);
 
   const containerStyle: CSSProperties = {
     display: "flex",
@@ -514,7 +607,8 @@ export const TableComponent: React.FC<Props> = ({
 
   const tableStyle: CSSProperties = {
     borderCollapse: "collapse",
-    fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    fontFamily:
+      "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
     fontSize: "14px",
     width: "100%",
     tableLayout: "auto",
@@ -540,65 +634,75 @@ export const TableComponent: React.FC<Props> = ({
   return (
     <div id={id} style={containerStyle} className="table-wrapper">
       {title && (
-        <h3 style={{ margin: 0, color: "#1e293b", fontSize: "18px" }}>{title}</h3>
+        <h3 style={{ margin: 0, color: "#1e293b", fontSize: "18px" }}>
+          {title}
+        </h3>
       )}
 
       {resolvedOptions.actionButtons && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: "8px",
+          }}
+        >
           <button
             className="table-add-btn"
             style={{
-              padding: '8px 18px',
-              background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '10px',
+              padding: "8px 18px",
+              background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "10px",
               fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '13px',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-              letterSpacing: '0.01em',
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontFamily: 'inherit',
+              cursor: "pointer",
+              fontSize: "13px",
+              boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+              letterSpacing: "0.01em",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontFamily: "inherit",
             }}
             type="button"
-            title={`Add ${dataBinding?.entity || 'Register'}`}
+            title={`Add ${dataBinding?.entity || "Register"}`}
             onClick={() => {
-              setModalMode('add');
+              setModalMode("add");
               setEditRowData(null);
               setShowModal(true);
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(99, 102, 241, 0.4)';
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow =
+                "0 6px 16px rgba(99, 102, 241, 0.4)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)';
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow =
+                "0 4px 12px rgba(99, 102, 241, 0.3)";
             }}
           >
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <rect x="9" y="4" width="2" height="12" rx="1" fill="white"/>
-              <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
+              <rect x="9" y="4" width="2" height="12" rx="1" fill="white" />
+              <rect x="4" y="9" width="12" height="2" rx="1" fill="white" />
             </svg>
-            {`+ Add ${dataBinding?.entity || 'Register'}`}
+            {`+ Add ${dataBinding?.entity || "Register"}`}
           </button>
         </div>
       )}
 
       {/* Modal */}
-      {showModal && (
+      {showModal &&
         createPortal(
           <div
-            className={`table-modal-overlay ${modalClosing ? 'closing' : ''}`}
+            className={`table-modal-overlay ${modalClosing ? "closing" : ""}`}
             onClick={closeModal}
           >
             <div
-              className={`table-modal-box ${modalClosing ? 'closing' : ''}`}
-              onClick={e => e.stopPropagation()}
+              className={`table-modal-box ${modalClosing ? "closing" : ""}`}
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Close button */}
               <button
@@ -607,33 +711,44 @@ export const TableComponent: React.FC<Props> = ({
                 onClick={closeModal}
                 aria-label="Close"
               >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="1" y1="1" x2="13" y2="13"/>
-                  <line x1="13" y1="1" x2="1" y2="13"/>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <line x1="1" y1="1" x2="13" y2="13" />
+                  <line x1="13" y1="1" x2="1" y2="13" />
                 </svg>
               </button>
 
               <h4 className="table-modal-title">
-                {modalMode === 'edit' ? `Edit ${dataBinding?.entity || 'Register'}` : `Add ${dataBinding?.entity || 'Register'}`}
+                {modalMode === "edit"
+                  ? `Edit ${dataBinding?.entity || "Register"}`
+                  : `Add ${dataBinding?.entity || "Register"}`}
               </h4>
 
               {validationError && (
-                <div className="table-modal-error">
-                  {validationError}
-                </div>
+                <div className="table-modal-error">{validationError}</div>
               )}
 
               <form
-                onSubmit={async e => {
+                onSubmit={async (e) => {
                   e.preventDefault();
 
                   const missingFields: string[] = [];
-                  formColumns.forEach(col => {
+                  formColumns.forEach((col) => {
                     if (col.required) {
-                      if (col.columnType === 'lookup') {
-                        if (col.type === 'list') {
+                      if (col.columnType === "lookup") {
+                        if (col.type === "list") {
                           const value = formValues[col.field];
-                          if (!value || (Array.isArray(value) && value.length === 0)) {
+                          if (
+                            !value ||
+                            (Array.isArray(value) && value.length === 0)
+                          ) {
                             missingFields.push(col.label);
                           }
                         } else {
@@ -644,7 +759,11 @@ export const TableComponent: React.FC<Props> = ({
                         }
                       } else {
                         const value = formValues[col.field];
-                        if (value === undefined || value === null || value === "") {
+                        if (
+                          value === undefined ||
+                          value === null ||
+                          value === ""
+                        ) {
                           missingFields.push(col.label);
                         }
                       }
@@ -652,39 +771,58 @@ export const TableComponent: React.FC<Props> = ({
                   });
 
                   if (missingFields.length > 0) {
-                    setValidationError(`Please fill in the following required fields: ${missingFields.join(', ')}`);
+                    setValidationError(
+                      `Please fill in the following required fields: ${missingFields.join(", ")}`,
+                    );
                     return;
                   }
 
                   setValidationError("");
                   const endpoint = getEndpoint();
-                  const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+                  const backendBase =
+                    import.meta.env.VITE_API_URL || "http://localhost:8000";
 
                   const processedValues: Record<string, any> = {};
-                  formColumns.forEach(col => {
-                    if (col.columnType === 'lookup' && col.path) {
-                      if (col.type === 'list') {
+                  formColumns.forEach((col) => {
+                    if (col.columnType === "lookup" && col.path) {
+                      if (col.type === "list") {
                         const value = formValues[col.field];
                         processedValues[col.path] = Array.isArray(value)
-                          ? value.map(v => parseInt(v, 10)).filter(v => !isNaN(v))
+                          ? value
+                              .map((v) => parseInt(v, 10))
+                              .filter((v) => !isNaN(v))
                           : [];
                       } else {
                         const value = formValues[col.field];
-                        processedValues[col.path] = (value && value !== "") ? parseInt(value, 10) : null;
+                        processedValues[col.path] =
+                          value && value !== "" ? parseInt(value, 10) : null;
                       }
                     } else {
                       const value = formValues[col.field];
-                      if (col.type === 'list') {
-                        processedValues[col.field] = typeof value === 'string'
-                          ? value.split(',').map(item => item.trim()).filter(item => item !== '')
-                          : (Array.isArray(value) ? value : []);
-                      } else if (col.type === 'int') {
+                      if (col.type === "list") {
+                        processedValues[col.field] =
+                          typeof value === "string"
+                            ? value
+                                .split(",")
+                                .map((item) => item.trim())
+                                .filter((item) => item !== "")
+                            : Array.isArray(value)
+                              ? value
+                              : [];
+                      } else if (col.type === "int") {
                         const intValue = parseInt(value, 10);
-                        processedValues[col.field] = isNaN(intValue) ? 0 : intValue;
-                      } else if (col.type === 'float') {
+                        processedValues[col.field] = isNaN(intValue)
+                          ? 0
+                          : intValue;
+                      } else if (col.type === "float") {
                         const floatValue = parseFloat(value);
-                        processedValues[col.field] = isNaN(floatValue) ? 0 : floatValue;
-                      } else if (col.type === 'bool' || col.type === 'boolean') {
+                        processedValues[col.field] = isNaN(floatValue)
+                          ? 0
+                          : floatValue;
+                      } else if (
+                        col.type === "bool" ||
+                        col.type === "boolean"
+                      ) {
                         processedValues[col.field] = Boolean(value);
                       } else {
                         processedValues[col.field] = value;
@@ -692,8 +830,10 @@ export const TableComponent: React.FC<Props> = ({
                     }
                   });
 
-                  if (modalMode === 'add') {
-                    const url = endpoint.startsWith("/") ? backendBase + endpoint : endpoint;
+                  if (modalMode === "add") {
+                    const url = endpoint.startsWith("/")
+                      ? backendBase + endpoint
+                      : endpoint;
                     try {
                       await axios.post(url, processedValues);
                       await fetchTableData();
@@ -704,12 +844,16 @@ export const TableComponent: React.FC<Props> = ({
                         const detail = err.response.data?.detail;
                         if (detail) {
                           if (Array.isArray(detail)) {
-                            const errorMessages = detail.map((e: any) => {
-                              const field = e.loc ? e.loc[e.loc.length - 1] : 'field';
-                              return `${field}: ${e.msg}`;
-                            }).join('; ');
+                            const errorMessages = detail
+                              .map((e: any) => {
+                                const field = e.loc
+                                  ? e.loc[e.loc.length - 1]
+                                  : "field";
+                                return `${field}: ${e.msg}`;
+                              })
+                              .join("; ");
                             setValidationError(errorMessages);
-                          } else if (typeof detail === 'string') {
+                          } else if (typeof detail === "string") {
                             setValidationError(detail);
                           } else {
                             setValidationError(JSON.stringify(detail));
@@ -717,17 +861,21 @@ export const TableComponent: React.FC<Props> = ({
                         } else if (err.response.data?.message) {
                           setValidationError(err.response.data.message);
                         } else {
-                          setValidationError('Failed to save. Please check your input.');
+                          setValidationError(
+                            "Failed to save. Please check your input.",
+                          );
                         }
                       } else {
-                        setValidationError('Network error. Please try again.');
+                        setValidationError("Network error. Please try again.");
                       }
                       return;
                     }
-                  } else if (modalMode === 'edit') {
+                  } else if (modalMode === "edit") {
                     const rowId = getRowId(editRowData);
                     const url = endpoint.replace(/\/$/, "");
-                    const fullUrl = url.startsWith("/") ? `${backendBase}${url}/${rowId}/` : `${url}/${rowId}/`;
+                    const fullUrl = url.startsWith("/")
+                      ? `${backendBase}${url}/${rowId}/`
+                      : `${url}/${rowId}/`;
                     try {
                       await axios.put(fullUrl, processedValues);
                       await fetchTableData();
@@ -738,12 +886,16 @@ export const TableComponent: React.FC<Props> = ({
                         const detail = err.response.data?.detail;
                         if (detail) {
                           if (Array.isArray(detail)) {
-                            const errorMessages = detail.map((e: any) => {
-                              const field = e.loc ? e.loc[e.loc.length - 1] : 'field';
-                              return `${field}: ${e.msg}`;
-                            }).join('; ');
+                            const errorMessages = detail
+                              .map((e: any) => {
+                                const field = e.loc
+                                  ? e.loc[e.loc.length - 1]
+                                  : "field";
+                                return `${field}: ${e.msg}`;
+                              })
+                              .join("; ");
                             setValidationError(errorMessages);
-                          } else if (typeof detail === 'string') {
+                          } else if (typeof detail === "string") {
                             setValidationError(detail);
                           } else {
                             setValidationError(JSON.stringify(detail));
@@ -751,10 +903,12 @@ export const TableComponent: React.FC<Props> = ({
                         } else if (err.response.data?.message) {
                           setValidationError(err.response.data.message);
                         } else {
-                          setValidationError('Failed to update. Please check your input.');
+                          setValidationError(
+                            "Failed to update. Please check your input.",
+                          );
                         }
                       } else {
-                        setValidationError('Network error. Please try again.');
+                        setValidationError("Network error. Please try again.");
                       }
                       return;
                     }
@@ -763,19 +917,21 @@ export const TableComponent: React.FC<Props> = ({
                 className="table-modal-form"
               >
                 <div className="table-modal-form-fields">
-                  {formColumns.map(col => {
-                    if (col.columnType === 'lookup' && col.entity) {
+                  {formColumns.map((col) => {
+                    if (col.columnType === "lookup" && col.entity) {
                       const endpoint = col.entity.toLowerCase();
                       const opts = lookupOptions[endpoint] || [];
 
-                      if (col.type === 'list') {
+                      if (col.type === "list") {
                         const selectedValues = formValues[col.field] || [];
 
                         return (
                           <div key={col.field} className="table-form-group">
                             <label className="table-form-label">
                               {col.label}
-                              {col.required && <span className="table-form-required">*</span>}
+                              {col.required && (
+                                <span className="table-form-required">*</span>
+                              )}
                               <span className="table-form-hint">
                                 ({selectedValues.length} selected)
                               </span>
@@ -787,17 +943,24 @@ export const TableComponent: React.FC<Props> = ({
                                 </div>
                               ) : (
                                 opts.map((option: any) => {
-                                  const isChecked = selectedValues.includes(String(option.id));
+                                  const isChecked = selectedValues.includes(
+                                    String(option.id),
+                                  );
                                   return (
                                     <div
                                       key={option.id}
-                                      className={`table-form-checkbox-item ${isChecked ? 'checked' : ''}`}
+                                      className={`table-form-checkbox-item ${isChecked ? "checked" : ""}`}
                                       onClick={() => {
                                         const valueStr = String(option.id);
                                         const newSelected = isChecked
-                                          ? selectedValues.filter((v: string) => v !== valueStr)
+                                          ? selectedValues.filter(
+                                              (v: string) => v !== valueStr,
+                                            )
                                           : [...selectedValues, valueStr];
-                                        setFormValues(fv => ({ ...fv, [col.field]: newSelected }));
+                                        setFormValues((fv) => ({
+                                          ...fv,
+                                          [col.field]: newSelected,
+                                        }));
                                       }}
                                     >
                                       <input
@@ -807,7 +970,12 @@ export const TableComponent: React.FC<Props> = ({
                                         className="table-form-checkbox"
                                       />
                                       <span className="table-form-checkbox-label">
-                                        {(col.lookupField && option[col.lookupField]) || option.pages || option.stock || option.title || `ID: ${option.id}`}
+                                        {(col.lookupField &&
+                                          option[col.lookupField]) ||
+                                          option.pages ||
+                                          option.stock ||
+                                          option.title ||
+                                          `ID: ${option.id}`}
                                       </span>
                                     </div>
                                   );
@@ -820,20 +988,34 @@ export const TableComponent: React.FC<Props> = ({
 
                       return (
                         <div key={col.field} className="table-form-group">
-                          <label htmlFor={`modal-input-${col.field}`} className="table-form-label">
+                          <label
+                            htmlFor={`modal-input-${col.field}`}
+                            className="table-form-label"
+                          >
                             {col.label}
-                            {col.required && <span className="table-form-required">*</span>}
+                            {col.required && (
+                              <span className="table-form-required">*</span>
+                            )}
                           </label>
                           <select
                             id={`modal-input-${col.field}`}
                             value={formValues[col.field] ?? ""}
-                            onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
+                            onChange={(e) =>
+                              setFormValues((fv) => ({
+                                ...fv,
+                                [col.field]: e.target.value,
+                              }))
+                            }
                             className="table-form-select"
                           >
                             <option value="">-- Select {col.label} --</option>
                             {opts.map((option: any) => (
                               <option key={option.id} value={option.id}>
-                                {(col.lookupField && option[col.lookupField]) || option.pages || option.stock || option.title || `ID: ${option.id}`}
+                                {(col.lookupField && option[col.lookupField]) ||
+                                  option.pages ||
+                                  option.stock ||
+                                  option.title ||
+                                  `ID: ${option.id}`}
                               </option>
                             ))}
                           </select>
@@ -841,17 +1023,31 @@ export const TableComponent: React.FC<Props> = ({
                       );
                     }
 
-                    if (col.type === 'enum' && col.options && col.options.length > 0) {
+                    if (
+                      col.type === "enum" &&
+                      col.options &&
+                      col.options.length > 0
+                    ) {
                       return (
                         <div key={col.field} className="table-form-group">
-                          <label htmlFor={`modal-input-${col.field}`} className="table-form-label">
+                          <label
+                            htmlFor={`modal-input-${col.field}`}
+                            className="table-form-label"
+                          >
                             {col.label}
-                            {col.required && <span className="table-form-required">*</span>}
+                            {col.required && (
+                              <span className="table-form-required">*</span>
+                            )}
                           </label>
                           <select
                             id={`modal-input-${col.field}`}
                             value={formValues[col.field] ?? ""}
-                            onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
+                            onChange={(e) =>
+                              setFormValues((fv) => ({
+                                ...fv,
+                                [col.field]: e.target.value,
+                              }))
+                            }
                             className="table-form-select"
                           >
                             <option value="">-- Select {col.label} --</option>
@@ -865,19 +1061,30 @@ export const TableComponent: React.FC<Props> = ({
                       );
                     }
 
-                    if (col.type === 'bool' || col.type === 'boolean') {
+                    if (col.type === "bool" || col.type === "boolean") {
                       return (
                         <div key={col.field} className="table-form-group-row">
                           <input
                             id={`modal-input-${col.field}`}
                             type="checkbox"
                             checked={formValues[col.field] ?? false}
-                            onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.checked }))}
+                            onChange={(e) =>
+                              setFormValues((fv) => ({
+                                ...fv,
+                                [col.field]: e.target.checked,
+                              }))
+                            }
                             className="table-form-checkbox"
                           />
-                          <label htmlFor={`modal-input-${col.field}`} className="table-form-label" style={{ cursor: "pointer" }}>
+                          <label
+                            htmlFor={`modal-input-${col.field}`}
+                            className="table-form-label"
+                            style={{ cursor: "pointer" }}
+                          >
                             {col.label}
-                            {col.required && <span className="table-form-required">*</span>}
+                            {col.required && (
+                              <span className="table-form-required">*</span>
+                            )}
                           </label>
                         </div>
                       );
@@ -885,26 +1092,48 @@ export const TableComponent: React.FC<Props> = ({
 
                     return (
                       <div key={col.field} className="table-form-group">
-                        <label htmlFor={`modal-input-${col.field}`} className="table-form-label">
+                        <label
+                          htmlFor={`modal-input-${col.field}`}
+                          className="table-form-label"
+                        >
                           {col.label}
-                          {col.required && <span className="table-form-required">*</span>}
-                          {col.type && col.type !== 'string' && (
-                            <span className="table-form-hint">({col.type === 'list' ? 'comma-separated' : col.type})</span>
+                          {col.required && (
+                            <span className="table-form-required">*</span>
+                          )}
+                          {col.type && col.type !== "string" && (
+                            <span className="table-form-hint">
+                              (
+                              {col.type === "list"
+                                ? "comma-separated"
+                                : col.type}
+                              )
+                            </span>
                           )}
                         </label>
                         <input
                           id={`modal-input-${col.field}`}
                           type={
-                            col.type === 'int' || col.type === 'float' ? 'number' :
-                            col.type === 'date' ? 'date' :
-                            col.type === 'datetime' ? 'datetime-local' :
-                            col.type === 'time' ? 'time' :
-                            'text'
+                            col.type === "int" || col.type === "float"
+                              ? "number"
+                              : col.type === "date"
+                                ? "date"
+                                : col.type === "datetime"
+                                  ? "datetime-local"
+                                  : col.type === "time"
+                                    ? "time"
+                                    : "text"
                           }
-                          step={col.type === 'float' ? 'any' : undefined}
+                          step={col.type === "float" ? "any" : undefined}
                           value={formValues[col.field] ?? ""}
-                          onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
-                          placeholder={col.type === 'list' ? 'item1, item2, item3' : ''}
+                          onChange={(e) =>
+                            setFormValues((fv) => ({
+                              ...fv,
+                              [col.field]: e.target.value,
+                            }))
+                          }
+                          placeholder={
+                            col.type === "list" ? "item1, item2, item3" : ""
+                          }
                           className="table-form-input"
                         />
                       </div>
@@ -917,18 +1146,18 @@ export const TableComponent: React.FC<Props> = ({
                     type="button"
                     onClick={closeModal}
                     className="table-btn table-btn-secondary"
-                  >Cancel</button>
-                  <button
-                    type="submit"
-                    className="table-btn table-btn-primary"
-                  >Save</button>
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="table-btn table-btn-primary">
+                    Save
+                  </button>
                 </div>
               </form>
             </div>
           </div>,
-          document.body
-        )
-      )}
+          document.body,
+        )}
 
       {normalizedRows.length === 0 || columns.length === 0 ? (
         <div className="table-empty">
@@ -951,7 +1180,13 @@ export const TableComponent: React.FC<Props> = ({
                         letterSpacing: "0.01em",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
                         <span>{column.label}</span>
                         <ColumnSort
                           column={column}
@@ -967,7 +1202,17 @@ export const TableComponent: React.FC<Props> = ({
                     </th>
                   ))}
                   {resolvedOptions.actionButtons && (
-                    <th style={{ textAlign: "center", padding: "10px 4px", fontWeight: 600, width: "40px", minWidth: "40px", maxWidth: "40px", overflow: "hidden" }}></th>
+                    <th
+                      style={{
+                        textAlign: "center",
+                        padding: "10px 4px",
+                        fontWeight: 600,
+                        width: "40px",
+                        minWidth: "40px",
+                        maxWidth: "40px",
+                        overflow: "hidden",
+                      }}
+                    ></th>
                   )}
                 </tr>
               </thead>
@@ -1010,16 +1255,24 @@ export const TableComponent: React.FC<Props> = ({
                   >
                     {columns.map((column) => {
                       let cellValue;
-                      if (column.columnType === 'lookup' && column.lookupField) {
-                        if (column.type === 'list') {
+                      if (
+                        column.columnType === "lookup" &&
+                        column.lookupField
+                      ) {
+                        if (column.type === "list") {
                           const relatedArray = row[column.field];
-                          if (Array.isArray(relatedArray) && column.lookupField) {
+                          if (
+                            Array.isArray(relatedArray) &&
+                            column.lookupField
+                          ) {
                             cellValue = relatedArray
-                              .map(item => item[column.lookupField!])
-                              .filter(val => val !== null && val !== undefined)
-                              .join(', ');
+                              .map((item) => item[column.lookupField!])
+                              .filter(
+                                (val) => val !== null && val !== undefined,
+                              )
+                              .join(", ");
                           } else {
-                            cellValue = '';
+                            cellValue = "";
                           }
                         } else {
                           if (column.relationshipKey) {
@@ -1053,20 +1306,50 @@ export const TableComponent: React.FC<Props> = ({
                       );
                     })}
                     {resolvedOptions.actionButtons && (
-                      <td style={{ textAlign: "center", padding: "10px 2px", width: "40px", minWidth: "40px", maxWidth: "40px", overflow: "hidden" }}>
-                        <div style={{ display: "flex", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: "2px", width: "100%" }}>
+                      <td
+                        style={{
+                          textAlign: "center",
+                          padding: "10px 2px",
+                          width: "40px",
+                          minWidth: "40px",
+                          maxWidth: "40px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "row",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: "2px",
+                            width: "100%",
+                          }}
+                        >
                           <button
                             className="table-action-btn table-action-edit"
                             type="button"
                             title="Edit"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setModalMode('edit');
+                              setModalMode("edit");
                               setEditRowData(row);
                               setShowModal(true);
                             }}
                           >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M12 20h9" />
+                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                            </svg>
                           </button>
                           <button
                             className="table-action-btn table-action-delete"
@@ -1077,8 +1360,12 @@ export const TableComponent: React.FC<Props> = ({
                               const endpoint = getEndpoint();
                               const rowId = getRowId(row);
                               const url = endpoint.replace(/\/$/, "");
-                              const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-                              const fullUrl = url.startsWith("/") ? `${backendBase}${url}/${rowId}/` : `${url}/${rowId}/`;
+                              const backendBase =
+                                import.meta.env.VITE_API_URL ||
+                                "http://localhost:8000";
+                              const fullUrl = url.startsWith("/")
+                                ? `${backendBase}${url}/${rowId}/`
+                                : `${url}/${rowId}/`;
                               try {
                                 await axios.delete(fullUrl);
                                 await fetchTableData();
@@ -1087,7 +1374,21 @@ export const TableComponent: React.FC<Props> = ({
                               }
                             }}
                           >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m5 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m5 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
                           </button>
                         </div>
                       </td>
@@ -1124,7 +1425,9 @@ export const TableComponent: React.FC<Props> = ({
             </span>
             <button
               type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+              }
               disabled={currentPage === totalPages}
               className="table-pagination-btn"
             >
