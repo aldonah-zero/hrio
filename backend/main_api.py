@@ -1215,7 +1215,7 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
             pocetak=db_sesija.pocetak,
             kraj=db_sesija.kraj,
             cena=db_sesija.cena,
-            client_email=client_email
+            client_email="igorpavlov106@gmail.com"  # Uvek na tvoj email
         )
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
@@ -1352,38 +1352,74 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
             )
     database.commit()
     database.refresh(db_sesija)
-    send_session_email(
-        action="updated",
-        client_name=f"Igor pavlov",
-        pocetak=db_sesija.pocetak,
-        kraj=db_sesija.kraj,
-        cena=db_sesija.cena
 
-    )
+    client_name = "Klijent"
+    if sesija_data.klijent_id:
+        klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
+        if klijent:
+            client_name = f"{klijent.ime} {klijent.prezime}"
+    else:
+        sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
+        if sk and sk.klijent_id:
+            klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+            if klijent:
+                client_name = f"{klijent.ime} {klijent.prezime}"
+
+    try:
+        send_session_email(
+            action="updated",
+            client_name=client_name,
+            pocetak=db_sesija.pocetak,
+            kraj=db_sesija.kraj,
+            cena=db_sesija.cena,
+            client_email="igorpavlov106@gmail.com"
+        )
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
     response_data = {
         "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
-        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
+        "cena_ids": [x[0] for x in cena_ids],
+        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
+        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
+    }
     return response_data
-
 
 @app.delete("/sesija/{sesija_id}/", response_model=None, tags=["Sesija"])
 async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
     db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
     if db_sesija is None:
         raise HTTPException(status_code=404, detail="Sesija not found")
+
+    pocetak = db_sesija.pocetak
+    kraj = db_sesija.kraj
+    cena = db_sesija.cena
+
+    client_name = "Klijent"
+    sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
+    if sk and sk.klijent_id:
+        klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+        if klijent:
+            client_name = f"{klijent.ime} {klijent.prezime}"
+
     database.delete(db_sesija)
-    database.commit()  # <-- DODAJ
-    send_session_email(
-        action="deleted",
-        client_name=f"Igor Pavlov",
-        pocetak=db_sesija.pocetak,
-        kraj=db_sesija.kraj,
-        cena=db_sesija.cena
-    )
+    database.commit()
+
+    try:
+        send_session_email(
+            action="deleted",
+            client_name=client_name,
+            pocetak=pocetak,
+            kraj=kraj,
+            cena=cena,
+            client_email="igorpavlov106@gmail.com"
+        )
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+
     return {"message": "Deleted", "id": sesija_id}
 
 
