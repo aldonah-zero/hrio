@@ -1148,6 +1148,8 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
     database.commit()
     database.refresh(db_sesija)
 
+    # NEMOJ slati email ovde — prvo povezi klijenta
+
     if sesija_data.uplate:
         for cena_id in sesija_data.uplate:
             db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
@@ -1178,7 +1180,7 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
         )
         database.commit()
 
-    # Get client info for email
+    # SAD dohvati klijenta — veze su već kreirane
     client_name = "Klijent"
     client_email = None
     sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
