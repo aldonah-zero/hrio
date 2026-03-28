@@ -597,7 +597,7 @@ body {
 }
 
 /* Mobile — bottom sheet style */
-@media (max-width: 768px) {
+/* @media (max-width: 768px) {
   .table-modal-overlay {
     align-items: flex-end !important;
     padding: 0 !important;
@@ -621,7 +621,7 @@ body {
       transform: translateY(0);
     }
   }
-}
+} */
 
 /* ============================
    TABLE CONTENT ANIMATION (tab switch)

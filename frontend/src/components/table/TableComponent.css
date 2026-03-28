@@ -444,9 +444,9 @@
    ============================ */
 @media (max-width: 768px) {
   .table-modal-overlay {
-    align-items: flex-start;
+    align-items: flex-end;
     padding: 0;
-    padding-top: 8vh;
+    padding-bottom: 12vh;
   }
   
 .table-modal-box {
