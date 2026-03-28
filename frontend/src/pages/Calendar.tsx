@@ -130,20 +130,11 @@ const Calendar: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchSessions();
-    fetchClients();
-    fetchLinks();
-
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        fetchSessions();
-        fetchLinks();
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
+    useEffect(() => {
+      fetchSessions();
+      fetchClients();
+      fetchLinks();
+    }, []);
 
   // Build a map: sessionId → client name(s)
   const sessionClientMap = useMemo(() => {
