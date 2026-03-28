@@ -118,7 +118,7 @@ def send_session_email(action, client_name, pocetak, kraj, cena, client_email=No
 
 <div style="background:#fff;border-radius:16px;padding:28px 24px 24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
 <div style="font-size:22px;margin-bottom:8px;">{c['icon']} {c['title']}</div>
-<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Zdravo, <strong>{client_name}</strong>.</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Zdravo, <strong>Maja</strong>.</div>
 <div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">{c['greeting']}</div>
 <div style="font-size:14px;color:#555;line-height:1.5;">Evo nekoliko detalja koje biste trebali znati o svojoj sesiji:</div>
 </div>
