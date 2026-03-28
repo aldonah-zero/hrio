@@ -446,6 +446,7 @@
   .table-modal-overlay {
     align-items: flex-end;
     padding: 0;
+    padding-bottom: 10vh;
   }
 
   .table-modal-box {
