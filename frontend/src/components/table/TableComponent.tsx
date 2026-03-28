@@ -697,11 +697,11 @@ export const TableComponent: React.FC<Props> = ({
       {showModal &&
         createPortal(
           <div
-            className={`table-modal-overlay ${modalClosing ? "closing" : ""}`}
+            className={`cal-modal-overlay ${modalClosing ? "closing" : ""}`}
             onClick={closeModal}
           >
             <div
-              className={`table-modal-box ${modalClosing ? "closing" : ""}`}
+              className={`cal-modal ${modalClosing ? "closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close button */}
