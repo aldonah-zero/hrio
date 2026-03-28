@@ -81,19 +81,29 @@ const humanize = (value: string): string => {
     .replace(/^./, (str) => str.toUpperCase());
 };
 
-const formatCellValue = (value: any): string => {
-  if (value === null || value === undefined) {
-    return "";
+const formatCellValue = (value: any, type?: string): string => {
+  if (value === null || value === undefined) return "";
+  if (
+    typeof value === "string" &&
+    (type === "datetime" || value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/))
+  ) {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) {
+      return (
+        d.toLocaleDateString("sr-Latn", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }) +
+        " " +
+        d.toLocaleTimeString("sr-Latn", { hour: "2-digit", minute: "2-digit" })
+      );
+    }
   }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean")
     return String(value);
-  }
-  if (value instanceof Date) {
-    return value.toLocaleString();
-  }
+  if (value instanceof Date) return value.toLocaleString();
   return JSON.stringify(value);
 };
 
@@ -1288,9 +1298,45 @@ export const TableComponent: React.FC<Props> = ({
                             overflow: "hidden",
                             maxWidth: "200px",
                           }}
-                          title={formatCellValue(cellValue)}
+                          title={formatCellValue(cellValue, column.type)}
                         >
-                          {formatCellValue(cellValue)}
+                          {column.field === "status" ? (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "4px 12px",
+                                borderRadius: "20px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                backgroundColor:
+                                  cellValue === "zakazano"
+                                    ? "#dbeafe"
+                                    : cellValue === "zavrseno"
+                                      ? "#dcfce7"
+                                      : cellValue === "otkazano"
+                                        ? "#fee2e2"
+                                        : "#f3f4f6",
+                                color:
+                                  cellValue === "zakazano"
+                                    ? "#1e40af"
+                                    : cellValue === "zavrseno"
+                                      ? "#166534"
+                                      : cellValue === "otkazano"
+                                        ? "#991b1b"
+                                        : "#374151",
+                              }}
+                            >
+                              {cellValue === "zakazano"
+                                ? "Zakazano"
+                                : cellValue === "zavrseno"
+                                  ? "Završeno"
+                                  : cellValue === "otkazano"
+                                    ? "Otkazano"
+                                    : formatCellValue(cellValue, column.type)}
+                            </span>
+                          ) : (
+                            formatCellValue(cellValue, column.type)
+                          )}
                         </td>
                       );
                     })}

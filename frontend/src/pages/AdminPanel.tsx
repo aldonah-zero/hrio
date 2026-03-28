@@ -144,13 +144,7 @@ const tableConfigs: Record<string, any> = {
       rowsPerPage: 10,
       actionButtons: true,
       columns: [
-        {
-          label: "ID",
-          column_type: "field",
-          field: "id",
-          type: "int",
-          required: true,
-        },
+        
         {
           label: "Ime",
           column_type: "field",
@@ -248,13 +242,7 @@ const tableConfigs: Record<string, any> = {
       rowsPerPage: 10,
       actionButtons: true,
       columns: [
-        {
-          label: "ID",
-          column_type: "field",
-          field: "id",
-          type: "int",
-          required: true,
-        },
+       
         {
           label: "Početak",
           column_type: "field",
