@@ -66,58 +66,90 @@ app = FastAPI(
 def format_datetime(dt):
     return dt.strftime("%d.%m.%Y %H:%M")
 
+def format_date_long(dt):
+    days = ["ponedeljak", "utorak", "sreda", "četvrtak", "petak", "subota", "nedelja"]
+    months = ["januar", "februar", "mart", "april", "maj", "jun", "jul", "avgust", "septembar", "oktobar", "novembar", "decembar"]
+    return f"{days[dt.weekday()]}, {dt.day}. {months[dt.month - 1]} {dt.year}."
 
-def send_session_email(action, client_name, pocetak, kraj, cena):
+def format_time(dt):
+    return dt.strftime("%H:%M")
+
+
+def send_session_email(action, client_name, pocetak, kraj, cena, client_email=None):
 
     config = {
         "created": {
-            "title": "Nova sesija zakazana",
+            "title": "Sesija zakazana",
+            "greeting": "Vaša sesija je potvrđena!",
             "color": "#4f46e5",
-            "icon": "📅"
+            "icon": "✅"
         },
         "updated": {
             "title": "Sesija izmenjena",
+            "greeting": "Vaša sesija je ažurirana.",
             "color": "#f59e0b",
             "icon": "✏️"
         },
         "deleted": {
             "title": "Sesija otkazana",
+            "greeting": "Vaša sesija je otkazana.",
             "color": "#ef4444",
             "icon": "🗑️"
         }
     }
 
-    title = config[action]["title"]
-    color = config[action]["color"]
-    icon = config[action]["icon"]
+    c = config[action]
+    app_url = os.getenv("APP_URL", "https://hrio-frontend-5c8704.onrender.com/")
 
     html = f"""
-    <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;">
-    <div style="max-width:480px;margin:auto;">
-    <div style="text-align:center;margin-bottom:16px;font-weight:600;color:#111;font-size:17px;">🧠 PsihApp</div>
-    <div style="background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;">
-    <div style="height:5px;background:{color};"></div>
-    <div style="padding:24px;">
-    <div style="font-size:19px;font-weight:700;color:#111;margin-bottom:3px;">{icon} {title}</div>
-    <div style="color:#9ca3af;font-size:13px;margin-bottom:24px;">Automatsko obaveštenje iz PsihApp sistema</div>
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:3px;font-weight:500;">Klijent</div>
-    <div style="font-size:16px;font-weight:600;color:#111;margin-bottom:20px;">{client_name}</div>
-    <table cellpadding="0" cellspacing="0" width="100%" style="background:#f9fafb;border-radius:10px;">
-    <tr><td style="padding:14px 16px 6px;color:#6b7280;font-size:14px;">Početak</td><td style="padding:14px 16px 6px;text-align:right;font-weight:600;font-size:14px;color:#111;">{format_datetime(pocetak)}</td></tr>
-    <tr><td style="padding:6px 16px;color:#6b7280;font-size:14px;">Kraj</td><td style="padding:6px 16px;text-align:right;font-weight:600;font-size:14px;color:#111;">{format_datetime(kraj)}</td></tr>
-    <tr><td style="padding:6px 16px 14px;color:#6b7280;font-size:14px;">Cena</td><td style="padding:6px 16px 14px;text-align:right;font-weight:700;font-size:14px;color:{color};">{cena} RSD</td></tr>
-    </table>
-    </div>
-    </div>
-    <div style="text-align:center;font-size:11px;color:#9ca3af;margin-top:14px;">PsihApp • Sistem za upravljanje sesijama</div>
-    </div>
-    </div>
-    """
+<div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
+<div style="max-width:520px;margin:auto;">
+
+<div style="background:#fff;border-radius:16px;padding:28px 24px 24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="font-size:22px;margin-bottom:8px;">{c['icon']} {c['title']}</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Zdravo, <strong>{client_name}</strong>.</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">{c['greeting']}</div>
+<div style="font-size:14px;color:#555;line-height:1.5;">Evo nekoliko detalja koje biste trebali znati o svojoj sesiji:</div>
+</div>
+
+<div style="background:#fff;border-radius:16px;padding:24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="border:1.5px dashed #d1d5db;border-radius:12px;padding:20px;">
+
+<div style="font-size:15px;color:#333;margin-bottom:14px;">📅 <strong>{format_date_long(pocetak)}</strong></div>
+
+<div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">Individualna sesija</div>
+<div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px;">{format_time(pocetak)} – {format_time(kraj)}</div>
+<div style="font-size:14px;color:#555;margin-bottom:16px;">{client_name} · {cena:,.2f} RSD</div>
+
+<div style="border-top:1.5px dashed #d1d5db;margin:0 0 16px;"></div>
+
+<table cellpadding="0" cellspacing="0" width="100%">
+<tr><td style="font-size:14px;color:#333;padding:3px 0;"><strong>Ukupno:</strong></td><td style="font-size:14px;color:#333;padding:3px 0;text-align:right;"><strong>{cena:,.2f} RSD</strong></td></tr>
+<tr><td style="font-size:14px;color:#333;padding:3px 0;"><strong>Status:</strong></td><td style="font-size:14px;color:#333;padding:3px 0;text-align:right;">{c['title']}</td></tr>
+</table>
+
+</div>
+</div>
+
+<div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:8px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+
+<div style="font-size:13px;color:#777;margin-bottom:14px;line-height:1.5;"><strong>Pravila otkazivanja i kašnjenja</strong><br>Vaša sesija može biti otkazana do <strong>24 sata</strong> pre termina. Ako kasnite više od <strong>10 minuta</strong>, sesija će se smatrati propuštenom.</div>
+
+<a href="{app_url}" style="display:inline-block;padding:14px 36px;background:#0f172a;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Otvori aplikaciju</a>
+</div>
+
+<div style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px;line-height:1.5;">
+Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
+</div>
+
+</div>
+</div>
+"""
 
     resend.Emails.send({
         "from": "PsihApp <onboarding@resend.dev>",
-        "to": ["igorpavlov106@gmail.com"],
-        "subject": f"{icon} {title}",
+        "to": [client_email or "igorpavlov106@gmail.com"],
+        "subject": f"{c['icon']} {c['title']} - {client_name}",
         "html": html
     })
 # def send_email(subject, body):
