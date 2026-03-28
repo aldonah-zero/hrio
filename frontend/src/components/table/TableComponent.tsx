@@ -720,8 +720,6 @@ export const TableComponent: React.FC<Props> = ({
                 </button>
               </div>
 
-              
-
               {validationError && (
                 <div className="table-modal-error">{validationError}</div>
               )}
@@ -907,7 +905,7 @@ export const TableComponent: React.FC<Props> = ({
                 }}
                 className="table-modal-form"
               >
-                <div className="table-modal-form-fields">
+                <div className="cal-modal-body">
                   {formColumns.map((col) => {
                     if (col.columnType === "lookup" && col.entity) {
                       const endpoint = col.entity.toLowerCase();
@@ -1132,16 +1130,16 @@ export const TableComponent: React.FC<Props> = ({
                   })}
                 </div>
 
-                <div className="table-modal-footer">
+                <div className="cal-modal-footer">
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="table-btn table-btn-secondary"
+                    className="cal-btn cal-btn-secondary"
                   >
-                    Cancel
+                    Otkaži
                   </button>
-                  <button type="submit" className="table-btn table-btn-primary">
-                    Save
+                  <button type="submit" className="cal-btn cal-btn-primary">
+                    Sačuvaj
                   </button>
                 </div>
               </form>
