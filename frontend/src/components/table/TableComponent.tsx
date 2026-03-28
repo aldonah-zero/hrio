@@ -704,32 +704,23 @@ export const TableComponent: React.FC<Props> = ({
               className={`cal-modal ${modalClosing ? "closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close button */}
-              <button
-                type="button"
-                className="table-modal-close"
-                onClick={closeModal}
-                aria-label="Close"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
+              <div className="cal-modal-header">
+                <h2>
+                  {modalMode === "edit"
+                    ? `Edit ${dataBinding?.entity || "Register"}`
+                    : `Add ${dataBinding?.entity || "Register"}`}
+                </h2>
+                <button
+                  type="button"
+                  className="cal-modal-close"
+                  onClick={closeModal}
+                  aria-label="Close"
                 >
-                  <line x1="1" y1="1" x2="13" y2="13" />
-                  <line x1="13" y1="1" x2="1" y2="13" />
-                </svg>
-              </button>
+                  ×
+                </button>
+              </div>
 
-              <h4 className="table-modal-title">
-                {modalMode === "edit"
-                  ? `Edit ${dataBinding?.entity || "Register"}`
-                  : `Add ${dataBinding?.entity || "Register"}`}
-              </h4>
+              
 
               {validationError && (
                 <div className="table-modal-error">{validationError}</div>
