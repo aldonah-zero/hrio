@@ -244,14 +244,28 @@ body {
 }
 
 /* ============================
-   ADMIN PANEL
+   ADMIN PANEL — UPDATED
    ============================ */
 .admin-panel {
   max-width: 1400px;
+  animation: adminFadeIn 0.4s ease;
+}
+
+@keyframes adminFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .admin-header {
   margin-bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-header-text {
+  flex: 1;
 }
 
 .admin-title {
@@ -267,15 +281,35 @@ body {
   margin-top: 4px;
 }
 
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(124, 58, 237, 0.08));
+  color: #6366f1;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Tabs */
 .admin-tabs {
   display: flex;
-  gap: 6px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 20px;
   background: #ffffff;
-  padding: 6px;
+  padding: 5px;
   border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.admin-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-tab {
@@ -291,32 +325,331 @@ body {
   font-family: inherit;
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.admin-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: #6366f1;
+  border-radius: 1px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(-50%);
 }
 
 .admin-tab:hover {
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #334155;
+}
+
+.admin-tab:hover::after {
+  width: 20px;
+}
+
+.admin-tab:active {
+  transform: scale(0.97);
 }
 
 .admin-tab.active {
   background: #0f172a;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2), 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.admin-tab.active::after {
+  width: 0;
 }
 
 .admin-tab.active svg {
   color: #ffffff;
 }
 
+.admin-tab-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.admin-tab:hover .admin-tab-icon {
+  transform: scale(1.1);
+}
+
+.admin-tab-label-mobile {
+  display: none;
+}
+
+/* Table container */
 .admin-table-container {
   background: #ffffff;
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.02),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+.admin-table-enter {
+  animation: tableEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.admin-table-exit {
+  opacity: 0.4;
+  transform: scale(0.99);
+}
+
+@keyframes tableEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================
+   RESPONSIVE — TABLET (1024px) — ADMIN OVERRIDES
+   ============================ */
+@media (max-width: 1024px) {
+  .admin-title {
+    font-size: 24px;
+  }
+
+  .admin-tab {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  .admin-table-container {
+    padding: 16px;
+  }
+
+  .admin-header-badge {
+    display: none;
+  }
+}
+
+/* ============================
+   RESPONSIVE — MOBILE (768px) — ADMIN OVERRIDES
+   ============================ */
+@media (max-width: 768px) {
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .admin-title {
+    font-size: 22px;
+  }
+
+  .admin-subtitle {
+    font-size: 13px;
+  }
+
+  .admin-header-badge {
+    display: none;
+  }
+
+  .admin-tabs {
+    padding: 4px;
+    gap: 3px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    flex-wrap: nowrap;
+  }
+
+  .admin-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 6px;
+    border-radius: 8px;
+  }
+
+  .admin-tab svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .admin-tab-label {
+    display: none;
+  }
+
+  .admin-tab-label-mobile {
+    display: inline;
+  }
+
+  .admin-table-container {
+    padding: 12px;
+    border-radius: 12px;
+  }
+}
+
+/* ============================
+   RESPONSIVE — SMALL MOBILE (480px) — ADMIN OVERRIDES
+   ============================ */
+@media (max-width: 480px) {
+  .admin-title {
+    font-size: 20px;
+  }
+
+  .admin-tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .admin-tab {
+    padding: 7px 10px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .admin-tab-icon {
+    display: none;
+  }
+
+  .admin-table-container {
+    padding: 8px;
+    border-radius: 10px;
+  }
+}
+/* ============================
+   MODAL ANIMATION
+   ============================ */
+.cal-modal-overlay {
+  animation: overlayFadeIn 0.25s ease;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cal-modal {
+  animation: modalSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ============================
+   TABLE TAB SWITCH ANIMATION
+   ============================ */
+.admin-table-container {
+  animation: tableSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes tableSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* ============================
+   TABLE MODAL ANIMATIONS
+   ============================ */
+.table-modal-overlay {
+  animation: tableModalOverlayIn 0.25s ease;
+}
+
+@keyframes tableModalOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.table-modal-box {
+  animation: tableModalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes tableModalIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Mobile — bottom sheet style */
+@media (max-width: 768px) {
+  .table-modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .table-modal-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 92vh !important;
+    animation: tableModalSheetUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  @keyframes tableModalSheetUp {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ============================
+   TABLE CONTENT ANIMATION (tab switch)
+   ============================ */
+.admin-table-container {
+  animation: adminTableIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes adminTableIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-table-exit {
+  opacity: 0.3;
+  transform: translateY(4px) scale(0.995);
+  transition: all 0.15s ease;
+}
+
+.admin-table-enter {
+  animation: adminTableIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
 /* ============================
    CALENDAR
    ============================ */

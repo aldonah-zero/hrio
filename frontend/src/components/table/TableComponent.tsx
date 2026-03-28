@@ -66,7 +66,6 @@ const formatCellValue = (value: any): string => {
   return JSON.stringify(value);
 };
 
-// Helper to get value from nested path (e.g., customer.age)
 const getNestedValue = (obj: any, path: string): any => {
   return path.split('.').reduce((current, key) => current?.[key], obj);
 };
@@ -79,14 +78,12 @@ export const TableComponent: React.FC<Props> = ({
   styles,
   dataBinding,
 }) => {
-  // Local state for table data
   const [tableData, setTableData] = useState<any[]>(data ?? []);
   const { setSelectedRow, registerTableRefresh } = useTableContext();
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' } | null>(null);
 
-  // Fetch table data from backend
   const fetchTableData = async () => {
     const endpoint = dataBinding?.endpoint
       ? dataBinding.endpoint
@@ -97,18 +94,16 @@ export const TableComponent: React.FC<Props> = ({
           : "";
     if (!endpoint) return;
     const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-    
-    // Check if table has lookup columns - if so, request detailed data with joins
+
     const hasLookupColumns = options?.columns?.some(
       (col: any) => typeof col === 'object' && col.column_type === 'lookup'
     );
-    
-    // Add detailed=true query param if there are lookup columns
+
     const urlParams = hasLookupColumns ? '?detailed=true' : '';
-    const url = endpoint.startsWith("/") 
+    const url = endpoint.startsWith("/")
       ? backendBase + endpoint + urlParams
       : endpoint + urlParams;
-    
+
     try {
       const response = await axios.get(url);
       if (Array.isArray(response.data)) {
@@ -121,21 +116,18 @@ export const TableComponent: React.FC<Props> = ({
     }
   };
 
-  // Register refresh function with context
   useEffect(() => {
     registerTableRefresh(id, fetchTableData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Initial fetch and update on data prop change
   useEffect(() => {
     if (data && Array.isArray(data)) {
       setTableData(data);
     } else {
       fetchTableData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
   const resolvedOptions: Required<TableOptions> & { actionButtons: boolean } = {
     showHeader: options?.showHeader ?? true,
     stripedRows: options?.stripedRows ?? false,
@@ -222,7 +214,6 @@ export const TableComponent: React.FC<Props> = ({
     return normalizedFormColumns.length > 0 ? normalizedFormColumns : columns;
   }, [columns, resolvedOptions.formColumns]);
 
-  // Apply column filters
   const filteredRows = useMemo(() => {
     if (Object.keys(columnFilters).length === 0) {
       return normalizedRows;
@@ -232,17 +223,13 @@ export const TableComponent: React.FC<Props> = ({
       return Object.entries(columnFilters).every(([field, filterValue]) => {
         if (!filterValue) return true;
 
-        // Find the column definition to check if it's a lookup
         const column = columns.find(col => col.field === field);
         let cellValue;
 
-        // Handle lookup columns
         if (column?.columnType === 'lookup' && column.lookupField) {
           if (column.type === 'list') {
-            // For list lookups (e.g., books array), get array of nested values
             const relatedArray = row[column.field];
             if (Array.isArray(relatedArray)) {
-              // Extract all lookup field values and join them for filtering
               cellValue = relatedArray
                 .map(item => item[column.lookupField!])
                 .filter(val => val !== null && val !== undefined)
@@ -251,7 +238,6 @@ export const TableComponent: React.FC<Props> = ({
               cellValue = '';
             }
           } else {
-            // For single lookups (e.g., library.name), get nested value
             if (column.relationshipKey) {
               cellValue = getNestedValue(row, `${column.relationshipKey}.${column.lookupField}`);
             }
@@ -263,7 +249,6 @@ export const TableComponent: React.FC<Props> = ({
           cellValue = row[field];
         }
 
-        // Special operators that don't need a value
         if (filterValue === "empty") {
           return cellValue === null || cellValue === undefined || cellValue === "";
         }
@@ -271,17 +256,14 @@ export const TableComponent: React.FC<Props> = ({
           return cellValue !== null && cellValue !== undefined && cellValue !== "";
         }
 
-        // Parse operator and value (format: "operator:value")
         const parts = filterValue.split(":");
         const operator = parts[0];
         const searchValue = parts.slice(1).join(":");
 
         if (!searchValue && operator !== "empty" && operator !== "not_empty") {
-          // Backward compatibility: no operator means contains
           return String(cellValue || "").toLowerCase().includes(filterValue.toLowerCase());
         }
 
-        // Handle null/undefined
         if (cellValue === null || cellValue === undefined) {
           return false;
         }
@@ -289,25 +271,14 @@ export const TableComponent: React.FC<Props> = ({
         const cellStr = String(cellValue).toLowerCase();
         const searchStr = searchValue.toLowerCase();
 
-        // String operators
-        if (operator === "contains") {
-          return cellStr.includes(searchStr);
-        }
-        if (operator === "equals") {
-          return cellStr === searchStr;
-        }
-        if (operator === "starts_with") {
-          return cellStr.startsWith(searchStr);
-        }
-        if (operator === "ends_with") {
-          return cellStr.endsWith(searchStr);
-        }
+        if (operator === "contains") return cellStr.includes(searchStr);
+        if (operator === "equals") return cellStr === searchStr;
+        if (operator === "starts_with") return cellStr.startsWith(searchStr);
+        if (operator === "ends_with") return cellStr.endsWith(searchStr);
 
-        // Numeric/Date operators
         const cellNum = Number(cellValue);
         const searchNum = Number(searchValue);
 
-        // Try numeric comparison first
         if (!isNaN(cellNum) && !isNaN(searchNum)) {
           if (operator === "eq") return cellNum === searchNum;
           if (operator === "ne") return cellNum !== searchNum;
@@ -317,10 +288,9 @@ export const TableComponent: React.FC<Props> = ({
           if (operator === "lte") return cellNum <= searchNum;
         }
 
-        // Try date comparison
         const cellDate = new Date(cellValue);
         const searchDate = new Date(searchValue);
-        
+
         if (!isNaN(cellDate.getTime()) && !isNaN(searchDate.getTime())) {
           if (operator === "eq") return cellDate.getTime() === searchDate.getTime();
           if (operator === "ne") return cellDate.getTime() !== searchDate.getTime();
@@ -330,7 +300,6 @@ export const TableComponent: React.FC<Props> = ({
           if (operator === "lte") return cellDate.getTime() <= searchDate.getTime();
         }
 
-        // String comparison as fallback
         if (operator === "eq") return cellStr === searchStr;
         if (operator === "ne") return cellStr !== searchStr;
         if (operator === "gt") return cellStr > searchStr;
@@ -352,7 +321,7 @@ export const TableComponent: React.FC<Props> = ({
       }
       return { ...prev, [field]: value };
     });
-    setCurrentPage(1); // Reset to first page when filtering
+    setCurrentPage(1);
   };
 
   const handleSortChange = (field: string) => {
@@ -363,11 +332,10 @@ export const TableComponent: React.FC<Props> = ({
       if (prev.direction === 'asc') {
         return { field, direction: 'desc' };
       }
-      return null; // Remove sorting
+      return null;
     });
   };
 
-  // Apply sorting after filtering
   const sortedAndFilteredRows = useMemo(() => {
     if (!sortConfig) {
       return filteredRows;
@@ -377,32 +345,27 @@ export const TableComponent: React.FC<Props> = ({
       const aValue = a[sortConfig.field];
       const bValue = b[sortConfig.field];
 
-      // Handle null/undefined
       if (aValue === null || aValue === undefined) return 1;
       if (bValue === null || bValue === undefined) return -1;
 
-      // Detect type and sort accordingly
       const aNum = Number(aValue);
       const bNum = Number(bValue);
 
-      // If both are valid numbers, sort numerically
       if (!isNaN(aNum) && !isNaN(bNum)) {
         return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
       }
 
-      // Try date parsing
       const aDate = new Date(aValue);
       const bDate = new Date(bValue);
       if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
-        return sortConfig.direction === 'asc' 
-          ? aDate.getTime() - bDate.getTime() 
+        return sortConfig.direction === 'asc'
+          ? aDate.getTime() - bDate.getTime()
           : bDate.getTime() - aDate.getTime();
       }
 
-      // Default to string comparison
       const aStr = String(aValue).toLowerCase();
       const bStr = String(bValue).toLowerCase();
-      
+
       if (sortConfig.direction === 'asc') {
         return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
       } else {
@@ -427,6 +390,15 @@ export const TableComponent: React.FC<Props> = ({
   const [editRowData, setEditRowData] = useState<any>(null);
   const [lookupOptions, setLookupOptions] = useState<Record<string, any[]>>({});
   const [validationError, setValidationError] = useState<string>("");
+  const [modalClosing, setModalClosing] = useState(false);
+
+  const closeModal = () => {
+    setModalClosing(true);
+    setTimeout(() => {
+      setShowModal(false);
+      setModalClosing(false);
+    }, 200);
+  };
 
   useEffect(() => {
     setCurrentPage(1);
@@ -439,7 +411,7 @@ export const TableComponent: React.FC<Props> = ({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setShowModal(false);
+        closeModal();
       }
     };
 
@@ -447,17 +419,14 @@ export const TableComponent: React.FC<Props> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showModal]);
 
-  // Reset form values when modal opens
   useEffect(() => {
     if (showModal) {
       setValidationError("");
       const initialValues: Record<string, any> = {};
       formColumns.forEach(col => {
         if (modalMode === 'edit' && editRowData) {
-          // For lookup columns in edit mode, use the FK ID
           if (col.columnType === 'lookup') {
             if (col.type === 'list') {
-              // For list-type lookups (1:N or N:M), get array of IDs from related objects
               const relatedArray = editRowData[col.relationshipKey || col.field];
               if (Array.isArray(relatedArray)) {
                 initialValues[col.field] = relatedArray.map((item: any) => String(item.id));
@@ -465,7 +434,6 @@ export const TableComponent: React.FC<Props> = ({
                 initialValues[col.field] = [];
               }
             } else {
-              // For single lookups (N:1), use the path as the field name
               const fkField = col.path || col.field;
               const fkIdField = `${fkField}_id`;
               initialValues[col.field] = editRowData[fkIdField] ?? "";
@@ -479,7 +447,6 @@ export const TableComponent: React.FC<Props> = ({
             }
           }
         } else {
-          // For new records, initialize appropriately
           if (col.columnType === 'lookup' && col.type === 'list') {
             initialValues[col.field] = [];
           } else {
@@ -489,11 +456,10 @@ export const TableComponent: React.FC<Props> = ({
       });
       setFormValues(initialValues);
 
-      // Fetch lookup options for lookup columns
       const fetchLookupOptions = async () => {
         const options: Record<string, any[]> = {};
         const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-        
+
         for (const col of formColumns) {
           if (col.columnType === 'lookup' && col.entity) {
             const endpoint = col.entity.toLowerCase();
@@ -554,7 +520,6 @@ export const TableComponent: React.FC<Props> = ({
     tableLayout: "auto",
   };
 
-  // Helper to get endpoint for entity
   const getEndpoint = () => {
     let endpoint = "";
     if (dataBinding?.endpoint) {
@@ -568,7 +533,6 @@ export const TableComponent: React.FC<Props> = ({
     return endpoint;
   };
 
-  // Helper to get row id
   const getRowId = (row: any) => {
     return row?.id ?? row?.ID ?? row?.Id ?? Object.values(row)[0];
   };
@@ -579,26 +543,26 @@ export const TableComponent: React.FC<Props> = ({
         <h3 style={{ margin: 0, color: "#1e293b", fontSize: "18px" }}>{title}</h3>
       )}
 
-      {/* Action Buttons above table */}
       {resolvedOptions.actionButtons && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
           <button
+            className="table-add-btn"
             style={{
-              padding: '6px 14px',
-              background: 'linear-gradient(90deg, #2563eb 0%, #1e40af 100%)',
+              padding: '8px 18px',
+              background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
               color: '#fff',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '10px',
               fontWeight: 600,
               cursor: 'pointer',
               fontSize: '13px',
-              boxShadow: '0 1px 4px rgba(37,99,235,0.10)',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
               letterSpacing: '0.01em',
-              transition: 'background 0.2s',
-              marginRight: '0',
+              transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '8px',
+              fontFamily: 'inherit',
             }}
             type="button"
             title={`Add ${dataBinding?.entity || 'Register'}`}
@@ -607,72 +571,62 @@ export const TableComponent: React.FC<Props> = ({
               setEditRowData(null);
               setShowModal(true);
             }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(99, 102, 241, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)';
+            }}
           >
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="10" cy="10" r="8" fill="#2563eb"/>
-              <rect x="9" y="5.5" width="2" height="9" rx="1" fill="white"/>
-              <rect x="5.5" y="9" width="9" height="2" rx="1" fill="white"/>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+              <rect x="9" y="4" width="2" height="12" rx="1" fill="white"/>
+              <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
             </svg>
-            {`Add ${dataBinding?.entity || 'Register'}`}
+            {`+ Add ${dataBinding?.entity || 'Register'}`}
           </button>
         </div>
       )}
 
-      {/* Modal for Add/Edit Register */}
+      {/* Modal */}
       {showModal && (
         createPortal(
           <div
-            onClick={() => setShowModal(false)}
-            style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(30,41,59,0.25)",
-            zIndex: 2147483647,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+            className={`table-modal-overlay ${modalClosing ? 'closing' : ''}`}
+            onClick={closeModal}
           >
             <div
+              className={`table-modal-box ${modalClosing ? 'closing' : ''}`}
               onClick={e => e.stopPropagation()}
-              style={{
-              background: "#fff",
-              borderRadius: "12px",
-              boxShadow: "0 4px 24px rgba(30,41,59,0.18)",
-              padding: "32px 24px 24px 24px",
-              minWidth: "320px",
-              maxWidth: "90vw",
-              width: "400px",
-              position: "relative",
-              maxHeight: "90vh",
-              display: "flex",
-              flexDirection: "column",
-            }}
             >
-              <h4 style={{ margin: 0, marginBottom: "18px", color: "#1e293b" }}>
+              {/* Close button */}
+              <button
+                type="button"
+                className="table-modal-close"
+                onClick={closeModal}
+                aria-label="Close"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="1" y1="1" x2="13" y2="13"/>
+                  <line x1="13" y1="1" x2="1" y2="13"/>
+                </svg>
+              </button>
+
+              <h4 className="table-modal-title">
                 {modalMode === 'edit' ? `Edit ${dataBinding?.entity || 'Register'}` : `Add ${dataBinding?.entity || 'Register'}`}
               </h4>
+
               {validationError && (
-                <div style={{
-                  padding: "12px",
-                  marginBottom: "16px",
-                  backgroundColor: "#fee2e2",
-                  border: "1px solid #fecaca",
-                  borderRadius: "6px",
-                  color: "#991b1b",
-                  fontSize: "14px",
-                }}>
+                <div className="table-modal-error">
                   {validationError}
                 </div>
               )}
+
               <form
                 onSubmit={async e => {
                   e.preventDefault();
-                  
-                  // Validate required fields
+
                   const missingFields: string[] = [];
                   formColumns.forEach(col => {
                     if (col.required) {
@@ -696,68 +650,57 @@ export const TableComponent: React.FC<Props> = ({
                       }
                     }
                   });
-                  
+
                   if (missingFields.length > 0) {
                     setValidationError(`Please fill in the following required fields: ${missingFields.join(', ')}`);
                     return;
                   }
-                  
+
                   setValidationError("");
                   const endpoint = getEndpoint();
                   const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-                  
-                  // Process form values based on column types
+
                   const processedValues: Record<string, any> = {};
                   formColumns.forEach(col => {
-                    // For lookup columns, use the path as the API field name
                     if (col.columnType === 'lookup' && col.path) {
                       if (col.type === 'list') {
-                        // For list-type lookups (N:M or 1:N), send array of IDs
                         const value = formValues[col.field];
-                        processedValues[col.path] = Array.isArray(value) 
+                        processedValues[col.path] = Array.isArray(value)
                           ? value.map(v => parseInt(v, 10)).filter(v => !isNaN(v))
                           : [];
                       } else {
-                        // For single lookups (N:1), send single FK ID using the field from form
                         const value = formValues[col.field];
                         processedValues[col.path] = (value && value !== "") ? parseInt(value, 10) : null;
                       }
                     } else {
                       const value = formValues[col.field];
                       if (col.type === 'list') {
-                        // Convert comma-separated string to array
-                        processedValues[col.field] = typeof value === 'string' 
+                        processedValues[col.field] = typeof value === 'string'
                           ? value.split(',').map(item => item.trim()).filter(item => item !== '')
                           : (Array.isArray(value) ? value : []);
                       } else if (col.type === 'int') {
-                        // Convert to integer
                         const intValue = parseInt(value, 10);
                         processedValues[col.field] = isNaN(intValue) ? 0 : intValue;
                       } else if (col.type === 'float') {
-                        // Convert to float
                         const floatValue = parseFloat(value);
                         processedValues[col.field] = isNaN(floatValue) ? 0 : floatValue;
                       } else if (col.type === 'bool' || col.type === 'boolean') {
-                        // Convert to boolean
                         processedValues[col.field] = Boolean(value);
                       } else {
-                        // Keep as string (includes date, datetime, time, text)
                         processedValues[col.field] = value;
                       }
                     }
                   });
-                  
+
                   if (modalMode === 'add') {
                     const url = endpoint.startsWith("/") ? backendBase + endpoint : endpoint;
                     try {
                       await axios.post(url, processedValues);
                       await fetchTableData();
-                      setShowModal(false);
+                      closeModal();
                     } catch (err) {
                       console.error("Error saving data:", err);
                       if (axios.isAxiosError(err) && err.response) {
-                        console.error("Response data:", err.response.data);
-                        // Parse and display validation errors from backend (Pydantic/FastAPI)
                         const detail = err.response.data?.detail;
                         if (detail) {
                           if (Array.isArray(detail)) {
@@ -779,7 +722,7 @@ export const TableComponent: React.FC<Props> = ({
                       } else {
                         setValidationError('Network error. Please try again.');
                       }
-                      return; // Keep modal open on error
+                      return;
                     }
                   } else if (modalMode === 'edit') {
                     const rowId = getRowId(editRowData);
@@ -788,7 +731,7 @@ export const TableComponent: React.FC<Props> = ({
                     try {
                       await axios.put(fullUrl, processedValues);
                       await fetchTableData();
-                      setShowModal(false);
+                      closeModal();
                     } catch (err) {
                       console.error("Error updating data:", err);
                       if (axios.isAxiosError(err) && err.response) {
@@ -813,268 +756,174 @@ export const TableComponent: React.FC<Props> = ({
                       } else {
                         setValidationError('Network error. Please try again.');
                       }
-                      return; // Keep modal open on error
+                      return;
                     }
                   }
                 }}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                  flex: "1 1 auto",
-                  minHeight: 0,
-                }}
+                className="table-modal-form"
               >
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                  overflowY: "auto",
-                  maxHeight: "60vh",
-                  paddingRight: "4px",
-                }}>
-                {formColumns.map(col => {
-                  // For lookup columns, render a select dropdown
-                  if (col.columnType === 'lookup' && col.entity) {
-                    const endpoint = col.entity.toLowerCase();
-                    const options = lookupOptions[endpoint] || [];
-                    
-                    // For list-type lookups (1:N or N:M), use checkbox list
-                    if (col.type === 'list') {
-                      const selectedValues = formValues[col.field] || [];
-                      
-                      return (
-                        <div key={col.field} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <label style={{ fontWeight: 500, color: "#334155" }}>
-                            {col.label}
-                            {col.required && <span style={{ color: "#ef4444", marginLeft: "4px" }}>*</span>}
-                            <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "6px" }}>
-                              ({selectedValues.length} selected)
-                            </span>
-                          </label>
-                          <div style={{
-                            maxHeight: "160px",
-                            overflowY: "auto",
-                            border: "1px solid #cbd5f5",
-                            borderRadius: "6px",
-                            padding: "8px",
-                            background: "#f8fafc",
-                          }}>
-                            {options.length === 0 ? (
-                              <div style={{ padding: "8px", color: "#64748b", fontSize: "14px" }}>
-                                No options available
-                              </div>
-                            ) : (
-                              options.map((option: any) => {
-                                const isChecked = selectedValues.includes(String(option.id));
-                                return (
-                                  <div 
-                                    key={option.id} 
-                                    style={{ 
-                                      display: "flex", 
-                                      alignItems: "center", 
-                                      gap: "8px",
-                                      padding: "6px 4px",
-                                      cursor: "pointer",
-                                      borderRadius: "4px",
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = "#e0e7ff"}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                    onClick={() => {
-                                      const valueStr = String(option.id);
-                                      const newSelected = isChecked
-                                        ? selectedValues.filter((v: string) => v !== valueStr)
-                                        : [...selectedValues, valueStr];
-                                      setFormValues(fv => ({ ...fv, [col.field]: newSelected }));
-                                    }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => {}} // Handled by parent div onClick
-                                      style={{
-                                        width: "16px",
-                                        height: "16px",
-                                        cursor: "pointer",
+                <div className="table-modal-form-fields">
+                  {formColumns.map(col => {
+                    if (col.columnType === 'lookup' && col.entity) {
+                      const endpoint = col.entity.toLowerCase();
+                      const opts = lookupOptions[endpoint] || [];
+
+                      if (col.type === 'list') {
+                        const selectedValues = formValues[col.field] || [];
+
+                        return (
+                          <div key={col.field} className="table-form-group">
+                            <label className="table-form-label">
+                              {col.label}
+                              {col.required && <span className="table-form-required">*</span>}
+                              <span className="table-form-hint">
+                                ({selectedValues.length} selected)
+                              </span>
+                            </label>
+                            <div className="table-form-checkbox-list">
+                              {opts.length === 0 ? (
+                                <div className="table-form-no-options">
+                                  No options available
+                                </div>
+                              ) : (
+                                opts.map((option: any) => {
+                                  const isChecked = selectedValues.includes(String(option.id));
+                                  return (
+                                    <div
+                                      key={option.id}
+                                      className={`table-form-checkbox-item ${isChecked ? 'checked' : ''}`}
+                                      onClick={() => {
+                                        const valueStr = String(option.id);
+                                        const newSelected = isChecked
+                                          ? selectedValues.filter((v: string) => v !== valueStr)
+                                          : [...selectedValues, valueStr];
+                                        setFormValues(fv => ({ ...fv, [col.field]: newSelected }));
                                       }}
-                                    />
-                                    <span style={{ fontSize: "14px", color: "#1e293b" }}>
-                                      {(col.lookupField && option[col.lookupField]) || option.pages || option.stock || option.title || `ID: ${option.id}`}
-                                    </span>
-                                  </div>
-                                );
-                              })
-                            )}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {}}
+                                        className="table-form-checkbox"
+                                      />
+                                      <span className="table-form-checkbox-label">
+                                        {(col.lookupField && option[col.lookupField]) || option.pages || option.stock || option.title || `ID: ${option.id}`}
+                                      </span>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
                           </div>
+                        );
+                      }
+
+                      return (
+                        <div key={col.field} className="table-form-group">
+                          <label htmlFor={`modal-input-${col.field}`} className="table-form-label">
+                            {col.label}
+                            {col.required && <span className="table-form-required">*</span>}
+                          </label>
+                          <select
+                            id={`modal-input-${col.field}`}
+                            value={formValues[col.field] ?? ""}
+                            onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
+                            className="table-form-select"
+                          >
+                            <option value="">-- Select {col.label} --</option>
+                            {opts.map((option: any) => (
+                              <option key={option.id} value={option.id}>
+                                {(col.lookupField && option[col.lookupField]) || option.pages || option.stock || option.title || `ID: ${option.id}`}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       );
                     }
-                    
-                    // For single lookups (N:1), use regular select
+
+                    if (col.type === 'enum' && col.options && col.options.length > 0) {
+                      return (
+                        <div key={col.field} className="table-form-group">
+                          <label htmlFor={`modal-input-${col.field}`} className="table-form-label">
+                            {col.label}
+                            {col.required && <span className="table-form-required">*</span>}
+                          </label>
+                          <select
+                            id={`modal-input-${col.field}`}
+                            value={formValues[col.field] ?? ""}
+                            onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
+                            className="table-form-select"
+                          >
+                            <option value="">-- Select {col.label} --</option>
+                            {col.options.map((option: string) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+
+                    if (col.type === 'bool' || col.type === 'boolean') {
+                      return (
+                        <div key={col.field} className="table-form-group-row">
+                          <input
+                            id={`modal-input-${col.field}`}
+                            type="checkbox"
+                            checked={formValues[col.field] ?? false}
+                            onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.checked }))}
+                            className="table-form-checkbox"
+                          />
+                          <label htmlFor={`modal-input-${col.field}`} className="table-form-label" style={{ cursor: "pointer" }}>
+                            {col.label}
+                            {col.required && <span className="table-form-required">*</span>}
+                          </label>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <div key={col.field} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <label htmlFor={`modal-input-${col.field}`} style={{ fontWeight: 500, color: "#334155" }}>
+                      <div key={col.field} className="table-form-group">
+                        <label htmlFor={`modal-input-${col.field}`} className="table-form-label">
                           {col.label}
-                          {col.required && <span style={{ color: "#ef4444", marginLeft: "4px" }}>*</span>}
+                          {col.required && <span className="table-form-required">*</span>}
+                          {col.type && col.type !== 'string' && (
+                            <span className="table-form-hint">({col.type === 'list' ? 'comma-separated' : col.type})</span>
+                          )}
                         </label>
-                        <select
-                          id={`modal-input-${col.field}`}
-                          value={formValues[col.field] ?? ""}
-                          onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
-                          style={{
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5f5",
-                            fontSize: "15px",
-                            color: "#1e293b",
-                            background: "#f8fafc",
-                          }}
-                        >
-                          <option value="">-- Select {col.label} --</option>
-                          {options.map((option: any) => (
-                            <option key={option.id} value={option.id}>
-                              {(col.lookupField && option[col.lookupField]) || option.pages || option.stock || option.title || `ID: ${option.id}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  }
-                  
-                  // For regular fields, render input
-                  // For enum fields, use dropdown
-                  if (col.type === 'enum' && col.options && col.options.length > 0) {
-                    return (
-                      <div key={col.field} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <label htmlFor={`modal-input-${col.field}`} style={{ fontWeight: 500, color: "#334155" }}>
-                          {col.label}
-                          {col.required && <span style={{ color: "#ef4444", marginLeft: "4px" }}>*</span>}
-                        </label>
-                        <select
-                          id={`modal-input-${col.field}`}
-                          value={formValues[col.field] ?? ""}
-                          onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
-                          style={{
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5f5",
-                            fontSize: "15px",
-                            color: "#1e293b",
-                            background: "#f8fafc",
-                          }}
-                        >
-                          <option value="">-- Select {col.label} --</option>
-                          {col.options.map((option: string) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  }
-                  
-                  // For boolean fields, use checkbox
-                  if (col.type === 'bool' || col.type === 'boolean') {
-                    return (
-                      <div key={col.field} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <input
                           id={`modal-input-${col.field}`}
-                          type="checkbox"
-                          checked={formValues[col.field] ?? false}
-                          onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.checked }))}
-                          style={{
-                            width: "18px",
-                            height: "18px",
-                            cursor: "pointer",
-                          }}
+                          type={
+                            col.type === 'int' || col.type === 'float' ? 'number' :
+                            col.type === 'date' ? 'date' :
+                            col.type === 'datetime' ? 'datetime-local' :
+                            col.type === 'time' ? 'time' :
+                            'text'
+                          }
+                          step={col.type === 'float' ? 'any' : undefined}
+                          value={formValues[col.field] ?? ""}
+                          onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
+                          placeholder={col.type === 'list' ? 'item1, item2, item3' : ''}
+                          className="table-form-input"
                         />
-                        <label htmlFor={`modal-input-${col.field}`} style={{ fontWeight: 500, color: "#334155", cursor: "pointer" }}>
-                          {col.label}
-                          {col.required && <span style={{ color: "#ef4444", marginLeft: "4px" }}>*</span>}
-                        </label>
                       </div>
                     );
-                  }
-                  
-                  return (
-                    <div key={col.field} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <label htmlFor={`modal-input-${col.field}`} style={{ fontWeight: 500, color: "#334155" }}>
-                        {col.label}
-                        {col.required && <span style={{ color: "#ef4444", marginLeft: "4px" }}>*</span>}
-                        {col.type && col.type !== 'string' && (
-                          <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "6px" }}>({col.type === 'list' ? 'comma-separated' : col.type})</span>
-                        )}
-                      </label>
-                      <input
-                        id={`modal-input-${col.field}`}
-                        type={
-                          col.type === 'int' || col.type === 'float' ? 'number' : 
-                          col.type === 'date' ? 'date' : 
-                          col.type === 'datetime' ? 'datetime-local' : 
-                          col.type === 'time' ? 'time' : 
-                          'text'
-                        }
-                        step={col.type === 'float' ? 'any' : undefined}
-                        value={formValues[col.field] ?? ""}
-                        onChange={e => setFormValues(fv => ({ ...fv, [col.field]: e.target.value }))}
-                        placeholder={col.type === 'list' ? 'item1, item2, item3' : ''}
-                        style={{
-                          padding: "8px 12px",
-                          borderRadius: "6px",
-                          border: "1px solid #cbd5f5",
-                          fontSize: "15px",
-                          color: "#1e293b",
-                          background: "#f8fafc",
-                        }}
-                      />
-                    </div>
-                  );
-                })}
+                  })}
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
+
+                <div className="table-modal-footer">
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
-                    style={{
-                      padding: "8px 18px",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5f5",
-                      background: "#f8fafc",
-                      color: "#475569",
-                      fontWeight: 500,
-                      cursor: "pointer",
-                    }}
+                    onClick={closeModal}
+                    className="table-btn table-btn-secondary"
                   >Cancel</button>
                   <button
                     type="submit"
-                    style={{
-                      padding: "8px 18px",
-                      borderRadius: "6px",
-                      border: "none",
-                      background: "linear-gradient(90deg, #2563eb 0%, #1e40af 100%)",
-                      color: "#fff",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
+                    className="table-btn table-btn-primary"
                   >Save</button>
                 </div>
               </form>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                style={{
-                  position: "absolute",
-                  top: "12px",
-                  right: "12px",
-                  background: "none",
-                  border: "none",
-                  fontSize: "20px",
-                  color: "#64748b",
-                  cursor: "pointer",
-                }}
-                aria-label="Close"
-              >x</button>
             </div>
           </div>,
           document.body
@@ -1082,16 +931,7 @@ export const TableComponent: React.FC<Props> = ({
       )}
 
       {normalizedRows.length === 0 || columns.length === 0 ? (
-        <div
-          style={{
-            padding: "24px",
-            textAlign: "center",
-            color: "#64748b",
-            border: "1px dashed #cbd5f5",
-            borderRadius: "8px",
-            backgroundColor: "#f8fafc",
-          }}
-        >
+        <div className="table-empty">
           No data available for{" "}
           {dataBinding?.entity ? `${dataBinding.entity}` : "this table"}.
         </div>
@@ -1136,144 +976,124 @@ export const TableComponent: React.FC<Props> = ({
               {visibleRows.map((row, rowIndex) => {
                 const actualRowIndex = (currentPage - 1) * pageSize + rowIndex;
                 const isSelected = selectedRowIndex === actualRowIndex;
-                
+
                 return (
-                <tr
-                  key={`${id}-row-${rowIndex}`}
-                  onClick={() => {
-                    setSelectedRowIndex(actualRowIndex);
-                    setSelectedRow(id, row);
-                    console.log(`[TableComponent] Row selected in table ${id}:`, row);
-                  }}
-                  style={{
-                    backgroundColor: isSelected
-                      ? "#dbeafe"
-                      : resolvedOptions.stripedRows && rowIndex % 2 === 1
-                        ? "#f8fafc"
-                        : "#ffffff",
-                    borderBottom: "1px solid #e2e8f0",
-                    cursor: "pointer",
-                    transition: "background-color 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = "#f1f5f9";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = 
-                        resolvedOptions.stripedRows && rowIndex % 2 === 1
+                  <tr
+                    key={`${id}-row-${rowIndex}`}
+                    onClick={() => {
+                      setSelectedRowIndex(actualRowIndex);
+                      setSelectedRow(id, row);
+                    }}
+                    className="table-row"
+                    style={{
+                      backgroundColor: isSelected
+                        ? "#dbeafe"
+                        : resolvedOptions.stripedRows && rowIndex % 2 === 1
                           ? "#f8fafc"
-                          : "#ffffff";
-                    }
-                  }}
-                >
-                  {columns.map((column) => {
-                    // For lookup columns, get nested value using the API relationship key
-                    let cellValue;
-                    if (column.columnType === 'lookup' && column.lookupField) {
-                      // Check if this is a list type (1:N or N:M relationship)
-                      if (column.type === 'list') {
-                        // Get the array of related objects using the field name
-                        const relatedArray = row[column.field];
-                        if (Array.isArray(relatedArray) && column.lookupField) {
-                          // Extract the field values from each object and join them
-                          cellValue = relatedArray
-                            .map(item => item[column.lookupField!])
-                            .filter(val => val !== null && val !== undefined)
-                            .join(', ');
+                          : "#ffffff",
+                      borderBottom: "1px solid #e2e8f0",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = "#f1f5f9";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor =
+                          resolvedOptions.stripedRows && rowIndex % 2 === 1
+                            ? "#f8fafc"
+                            : "#ffffff";
+                      }
+                    }}
+                  >
+                    {columns.map((column) => {
+                      let cellValue;
+                      if (column.columnType === 'lookup' && column.lookupField) {
+                        if (column.type === 'list') {
+                          const relatedArray = row[column.field];
+                          if (Array.isArray(relatedArray) && column.lookupField) {
+                            cellValue = relatedArray
+                              .map(item => item[column.lookupField!])
+                              .filter(val => val !== null && val !== undefined)
+                              .join(', ');
+                          } else {
+                            cellValue = '';
+                          }
                         } else {
-                          cellValue = '';
+                          if (column.relationshipKey) {
+                            const nestedPath = `${column.relationshipKey}.${column.lookupField}`;
+                            cellValue = getNestedValue(row, nestedPath);
+                          }
+                          if (!cellValue) {
+                            const nestedPath = `${column.field}.${column.lookupField}`;
+                            cellValue = getNestedValue(row, nestedPath);
+                          }
                         }
                       } else {
-                        // Single value lookup (N:1 relationship)
-                        // Try the relationship key first (e.g., customer.name)
-                        if (column.relationshipKey) {
-                          const nestedPath = `${column.relationshipKey}.${column.lookupField}`;
-                          cellValue = getNestedValue(row, nestedPath);
-                        }
-                        // Fallback to direct path (e.g., customer.name)
-                        if (!cellValue) {
-                          const nestedPath = `${column.field}.${column.lookupField}`;
-                          cellValue = getNestedValue(row, nestedPath);
-                        }
+                        cellValue = row[column.field];
                       }
-                    } else {
-                      cellValue = row[column.field];
-                    }
-                    
-                    return (
-                      <td
-                        key={`${id}-row-${rowIndex}-cell-${column.field}`}
-                        style={{
-                          padding: "10px 12px",
-                          color: "#1f2937",
-                          whiteSpace: "nowrap",
-                          textOverflow: "ellipsis",
-                          overflow: "hidden",
-                          maxWidth: "200px",
-                        }}
-                        title={formatCellValue(cellValue)}
-                      >
-                        {formatCellValue(cellValue)}
+
+                      return (
+                        <td
+                          key={`${id}-row-${rowIndex}-cell-${column.field}`}
+                          style={{
+                            padding: "10px 12px",
+                            color: "#1f2937",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                            overflow: "hidden",
+                            maxWidth: "200px",
+                          }}
+                          title={formatCellValue(cellValue)}
+                        >
+                          {formatCellValue(cellValue)}
+                        </td>
+                      );
+                    })}
+                    {resolvedOptions.actionButtons && (
+                      <td style={{ textAlign: "center", padding: "10px 2px", width: "40px", minWidth: "40px", maxWidth: "40px", overflow: "hidden" }}>
+                        <div style={{ display: "flex", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: "2px", width: "100%" }}>
+                          <button
+                            className="table-action-btn table-action-edit"
+                            type="button"
+                            title="Edit"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setModalMode('edit');
+                              setEditRowData(row);
+                              setShowModal(true);
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                          </button>
+                          <button
+                            className="table-action-btn table-action-delete"
+                            type="button"
+                            title="Remove"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const endpoint = getEndpoint();
+                              const rowId = getRowId(row);
+                              const url = endpoint.replace(/\/$/, "");
+                              const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+                              const fullUrl = url.startsWith("/") ? `${backendBase}${url}/${rowId}/` : `${url}/${rowId}/`;
+                              try {
+                                await axios.delete(fullUrl);
+                                await fetchTableData();
+                              } catch (err) {
+                                console.error("Error deleting data:", err);
+                              }
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m5 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                          </button>
+                        </div>
                       </td>
-                    );
-                  })}
-                  {resolvedOptions.actionButtons && (
-                    <td style={{ textAlign: "center", padding: "10px 2px", width: "40px", minWidth: "40px", maxWidth: "40px", overflow: "hidden" }}>
-                      <div style={{ display: "flex", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: "2px", width: "100%" }}>
-                        <button
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: "2px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          type="button"
-                          title="Edit"
-                          onClick={() => {
-                            setModalMode('edit');
-                            setEditRowData(row);
-                            setShowModal(true);
-                          }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e42" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                        </button>
-                        <button
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: "2px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          type="button"
-                          title="Remove"
-                          onClick={async () => {
-                            const endpoint = getEndpoint();
-                            const rowId = getRowId(row);
-                            const url = endpoint.replace(/\/$/, "");
-                            const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-                            const fullUrl = url.startsWith("/") ? `${backendBase}${url}/${rowId}/` : `${url}/${rowId}/`;
-                            try {
-                              await axios.delete(fullUrl);
-                              await fetchTableData();
-                            } catch (err) {
-                              console.error("Error deleting data:", err);
-                            }
-                          }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m5 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
+                    )}
+                  </tr>
+                );
               })}
             </tbody>
           </table>
@@ -1281,36 +1101,21 @@ export const TableComponent: React.FC<Props> = ({
       )}
 
       {resolvedOptions.showPagination && filteredRows.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-            fontSize: "13px",
-            color: "#475569",
-          }}
-        >
+        <div className="table-pagination">
           <span>
             Showing {visibleRows.length} of {sortedAndFilteredRows.length} rows
             {Object.keys(columnFilters).length > 0 && (
-              <span style={{ color: "#2563eb", marginLeft: "4px" }}>
+              <span className="table-pagination-filtered">
                 (filtered from {normalizedRows.length})
               </span>
             )}
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="table-pagination-controls">
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "6px",
-                border: "1px solid #cbd5f5",
-                backgroundColor: currentPage === 1 ? "#e2e8f0" : "#ffffff",
-                cursor: currentPage === 1 ? "not-allowed" : "pointer",
-              }}
+              className="table-pagination-btn"
             >
               Prev
             </button>
@@ -1319,19 +1124,9 @@ export const TableComponent: React.FC<Props> = ({
             </span>
             <button
               type="button"
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-              }
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "6px",
-                border: "1px solid #cbd5f5",
-                backgroundColor:
-                  currentPage === totalPages ? "#e2e8f0" : "#ffffff",
-                cursor:
-                  currentPage === totalPages ? "not-allowed" : "pointer",
-              }}
+              className="table-pagination-btn"
             >
               Next
             </button>

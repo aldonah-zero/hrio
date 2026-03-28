@@ -5,6 +5,7 @@ const tabs = [
   {
     key: "klijent",
     label: "Klijenti",
+    mobileLabel: "Klijenti",
     icon: (
       <svg
         width="16"
@@ -24,6 +25,7 @@ const tabs = [
   {
     key: "sesija",
     label: "Sesije",
+    mobileLabel: "Sesije",
     icon: (
       <svg
         width="16"
@@ -43,6 +45,7 @@ const tabs = [
   {
     key: "grupa",
     label: "Grupe",
+    mobileLabel: "Grupe",
     icon: (
       <svg
         width="16"
@@ -64,6 +67,7 @@ const tabs = [
   {
     key: "cena",
     label: "Uplate",
+    mobileLabel: "Uplate",
     icon: (
       <svg
         width="16"
@@ -83,6 +87,7 @@ const tabs = [
   {
     key: "sesijaklijent",
     label: "Sesija-Klijent",
+    mobileLabel: "S-K",
     icon: (
       <svg
         width="16"
@@ -105,6 +110,7 @@ const tabs = [
   {
     key: "sesijagrupa",
     label: "Sesija-Grupa",
+    mobileLabel: "S-G",
     icon: (
       <svg
         width="16"
@@ -611,16 +617,31 @@ const tableConfigs: Record<string, any> = {
 
 const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState("klijent");
+  const [animating, setAnimating] = useState(false);
   const config = tableConfigs[activeTab];
+
+  const handleTabChange = (key: string) => {
+    if (key === activeTab) return;
+    setAnimating(true);
+    setTimeout(() => {
+      setActiveTab(key);
+      setTimeout(() => setAnimating(false), 50);
+    }, 150);
+  };
 
   return (
     <div className="admin-panel">
       <div className="admin-header">
-        <div>
+        <div className="admin-header-text">
           <h1 className="admin-title">Admin Panel</h1>
           <p className="admin-subtitle">
             Upravljajte klijentima, sesijama, grupama i uplatama
           </p>
+        </div>
+        <div className="admin-header-badge">
+          <span className="admin-badge">
+            {tabs.find((t) => t.key === activeTab)?.label}
+          </span>
         </div>
       </div>
 
@@ -630,16 +651,19 @@ const AdminPanel: React.FC = () => {
           <button
             key={tab.key}
             className={`admin-tab ${activeTab === tab.key ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
           >
-            {tab.icon}
-            {tab.label}
+            <span className="admin-tab-icon">{tab.icon}</span>
+            <span className="admin-tab-label">{tab.label}</span>
+            <span className="admin-tab-label-mobile">{tab.mobileLabel}</span>
           </button>
         ))}
       </div>
 
       {/* Table */}
-      <div className="admin-table-container">
+      <div
+        className={`admin-table-container ${animating ? "admin-table-exit" : "admin-table-enter"}`}
+      >
         <TableBlock
           key={activeTab}
           id={`table-${activeTab}`}
