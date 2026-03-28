@@ -1191,15 +1191,22 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
         )
         database.commit()
 
-    # SAD dohvati klijenta — veze su već kreirane
+        # Dohvati klijenta iz payload-a ILI iz SesijaKlijent veze
     client_name = "Klijent"
     client_email = None
-    sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
-    if sk and sk.klijent_id:
-        klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+
+    if sesija_data.klijent_id:
+        klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
         if klijent:
             client_name = f"{klijent.ime} {klijent.prezime}"
             client_email = klijent.email
+    else:
+        sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
+        if sk and sk.klijent_id:
+            klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+            if klijent:
+                client_name = f"{klijent.ime} {klijent.prezime}"
+                client_email = klijent.email
 
     try:
         send_session_email(

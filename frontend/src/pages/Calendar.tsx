@@ -288,6 +288,7 @@ const Calendar: React.FC = () => {
         uplate: null,
         sesijaklijent_1: null,
         sesijagrupa_1: null,
+        klijent_id: formData.klijent_id ? parseInt(formData.klijent_id) : null,
       };
       if (selectedSession) {
         await axios.put(

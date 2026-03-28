@@ -38,6 +38,7 @@ class SesijaCreate(BaseModel):
     status: str
     id: int
     pocetak: datetime
+    klijent_id: Optional[int] = None
     kraj: datetime
     uplate: Optional[List[int]] = None               # FIXED: was 'cena' (conflict!), now 'uplate' - 1:N Relationship to Cena
     sesijaklijent_1: Optional[List[int]] = None      # 1:N Relationship
