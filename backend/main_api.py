@@ -1079,8 +1079,23 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
             result.append(item_dict)
         return result
     else:
-        # Default: return flat entities (faster for charts/widgets without lookup columns)
-        return database.query(Sesija).all()
+        sesija_list = database.query(Sesija).all()
+        result = []
+        for s in sesija_list:
+            item = s.__dict__.copy()
+            item.pop('_sa_instance_state', None)
+            # Dodaj ime klijenta
+            sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == s.id).first()
+            if sk and sk.klijent_id:
+                klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+                if klijent:
+                    item['klijent_ime'] = f"{klijent.ime} {klijent.prezime}"
+                else:
+                    item['klijent_ime'] = ""
+            else:
+                item['klijent_ime'] = ""
+            result.append(item)
+        return result
 
 
 @app.get("/sesija/count/", response_model=None, tags=["Sesija"])
