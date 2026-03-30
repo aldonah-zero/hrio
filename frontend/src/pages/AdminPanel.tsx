@@ -208,11 +208,13 @@ const tableConfigs: Record<string, any> = {
       ],
       formColumns: [
         {
-          column_type: "session_type_selector",
+          column_type: "session_type",
           field: "session_type",
           label: "Tip sesije",
           type: "str",
           required: true,
+          klijent_field: "klijent_id",
+          grupa_field: "grupa_id",
         },
         {
           column_type: "field",
@@ -268,7 +270,7 @@ const tableConfigs: Record<string, any> = {
           column_type: "field",
           field: "opis",
           type: "str",
-          required: true,
+          required: false,
         },
         {
           label: "Cena",
@@ -296,7 +298,7 @@ const tableConfigs: Record<string, any> = {
         {
           column_type: "field",
           field: "naziv",
-          label: "Naziv",
+          label: "Naziv grupe",
           type: "str",
           required: true,
         },
@@ -315,11 +317,12 @@ const tableConfigs: Record<string, any> = {
           required: true,
         },
         {
-          column_type: "multi_select_klijent",
+          column_type: "grupa_clanovi",
           field: "clanovi",
           label: "Članovi grupe",
           type: "list",
           required: false,
+          entity: "Klijent",
         },
       ],
     },
@@ -374,13 +377,6 @@ const tableConfigs: Record<string, any> = {
       formColumns: [
         {
           column_type: "field",
-          field: "id",
-          label: "ID",
-          type: "int",
-          required: true,
-        },
-        {
-          column_type: "field",
           field: "cena",
           label: "Cena (RSD)",
           type: "float",
@@ -405,6 +401,24 @@ const tableConfigs: Record<string, any> = {
           field: "status",
           label: "Status",
           type: "str",
+          required: true,
+        },
+        {
+          column_type: "lookup",
+          path: "sesija_2",
+          field: "sesija_2",
+          lookup_field: "id",
+          entity: "Sesija",
+          type: "int",
+          required: true,
+        },
+        {
+          column_type: "lookup",
+          path: "klijent_1",
+          field: "klijent_1",
+          lookup_field: "id",
+          entity: "Klijent",
+          type: "int",
           required: true,
         },
       ],
@@ -442,7 +456,6 @@ const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="admin-tabs">
         {tabs.map((tab) => (
           <button
@@ -457,7 +470,6 @@ const AdminPanel: React.FC = () => {
         ))}
       </div>
 
-      {/* Table */}
       <div
         className={`admin-table-container ${animating ? "admin-table-exit" : "admin-table-enter"}`}
       >

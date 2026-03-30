@@ -634,15 +634,17 @@ async def create_cena(cena_data: CenaCreate, database: Session = Depends(get_db)
     else:
         raise HTTPException(status_code=400, detail="Klijent ID is required")
 
-    db_cena = Cena(
+    cena_kwargs = dict(
         cena=cena_data.cena,
-        id=cena_data.id,
         status=cena_data.status,
         nacin_placanja=cena_data.nacin_placanja,
         datum_uplate=cena_data.datum_uplate,
         sesija_2_id=cena_data.sesija_2,
         klijent_1_id=cena_data.klijent_1
     )
+    if cena_data.id is not None:
+        cena_kwargs["id"] = cena_data.id
+    db_cena = Cena(**cena_kwargs)
 
     database.add(db_cena)
     database.commit()
@@ -833,11 +835,13 @@ async def create_sesijagrupa(sesijagrupa_data: SesijaGrupaCreate, database: Sess
     else:
         raise HTTPException(status_code=400, detail="Sesija ID is required")
 
-    db_sesijagrupa = SesijaGrupa(
-        id=sesijagrupa_data.id,
+    sg_kwargs = dict(
         grupa_id=sesijagrupa_data.grupa,
         sesija_1_id=sesijagrupa_data.sesija_1
     )
+    if sesijagrupa_data.id is not None:
+        sg_kwargs["id"] = sesijagrupa_data.id
+    db_sesijagrupa = SesijaGrupa(**sg_kwargs)
 
     database.add(db_sesijagrupa)
     database.commit()
@@ -1015,11 +1019,13 @@ async def create_sesijaklijent(sesijaklijent_data: SesijaKlijentCreate, database
     else:
         raise HTTPException(status_code=400, detail="Sesija ID is required")
 
-    db_sesijaklijent = SesijaKlijent(
-        id=sesijaklijent_data.id,
+    sk_kwargs = dict(
         klijent_id=sesijaklijent_data.klijent,
         sesija_id=sesijaklijent_data.sesija
     )
+    if sesijaklijent_data.id is not None:
+        sk_kwargs["id"] = sesijaklijent_data.id
+    db_sesijaklijent = SesijaKlijent(**sk_kwargs)
 
     database.add(db_sesijaklijent)
     database.commit()
@@ -1382,9 +1388,12 @@ async def get_sesija(sesija_id: int, database: Session = Depends(get_db)) -> Ses
 
 @app.post("/sesija/", response_model=None, tags=["Sesija"])
 async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(get_db)) -> Sesija:
-    db_sesija = Sesija(
-        cena=sesija_data.cena, status=sesija_data.status, id=sesija_data.id, pocetak=sesija_data.pocetak,
+    sesija_kwargs = dict(
+        cena=sesija_data.cena, status=sesija_data.status, pocetak=sesija_data.pocetak,
         kraj=sesija_data.kraj)
+    if sesija_data.id is not None:
+        sesija_kwargs["id"] = sesija_data.id
+    db_sesija = Sesija(**sesija_kwargs)
 
     database.add(db_sesija)
     database.commit()
@@ -1898,12 +1907,14 @@ async def get_grupa(grupa_id: int, database: Session = Depends(get_db)) -> Grupa
 
 @app.post("/grupa/", response_model=None, tags=["Grupa"])
 async def create_grupa(grupa_data: GrupaCreate, database: Session = Depends(get_db)) -> Grupa:
-    db_grupa = Grupa(
+    grupa_kwargs = dict(
         opis=grupa_data.opis,
-        id=grupa_data.id,
         cena=grupa_data.cena,
         naziv=grupa_data.naziv
     )
+    if grupa_data.id is not None:
+        grupa_kwargs["id"] = grupa_data.id
+    db_grupa = Grupa(**grupa_kwargs)
 
     database.add(db_grupa)
     database.commit()
@@ -2143,13 +2154,16 @@ async def get_klijent(klijent_id: int, database: Session = Depends(get_db)) -> K
 
 @app.post("/klijent/", response_model=None, tags=["Klijent"])
 async def create_klijent(klijent_data: KlijentCreate, database: Session = Depends(get_db)) -> Klijent:
-    db_klijent = Klijent(
+    klijent_kwargs = dict(
         ime=klijent_data.ime,
         email=klijent_data.email,
-        id=klijent_data.id,
         prezime=klijent_data.prezime,
         broj_telefona=klijent_data.broj_telefona
     )
+    if klijent_data.id is not None:
+        klijent_kwargs["id"] = klijent_data.id
+
+    db_klijent = Klijent(**klijent_kwargs)
 
     database.add(db_klijent)
     database.commit()

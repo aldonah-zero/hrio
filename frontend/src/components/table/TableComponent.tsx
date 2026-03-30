@@ -17,6 +17,9 @@ interface TableColumn {
   required?: boolean;
   lookupField?: string;
   relationshipKey?: string;
+  // Custom fields for session_type
+  klijent_field?: string;
+  grupa_field?: string;
 }
 
 interface TableOptions {
@@ -212,6 +215,8 @@ export const TableComponent: React.FC<Props> = ({
               required?: boolean;
               lookup_field?: string;
               lookupField?: string;
+              klijent_field?: string;
+              grupa_field?: string;
             }
           | string => Boolean(col),
       )
@@ -236,6 +241,8 @@ export const TableComponent: React.FC<Props> = ({
           required: col.required ?? false,
           lookupField: col.column_type === "lookup" ? lookupField : undefined,
           relationshipKey: relationshipKey,
+          klijent_field: (col as any).klijent_field,
+          grupa_field: (col as any).grupa_field,
         };
       });
   };
@@ -515,7 +522,26 @@ export const TableComponent: React.FC<Props> = ({
       const initialValues: Record<string, any> = {};
       formColumns.forEach((col) => {
         if (modalMode === "edit" && editRowData) {
-          if (col.columnType === "lookup") {
+          if (col.columnType === "session_type") {
+            // Determine session type from edit data
+            if (editRowData.grupa_id || editRowData.grupa_naziv) {
+              initialValues["session_type"] = "grupa";
+              initialValues["grupa_id"] = editRowData.grupa_id || "";
+              initialValues["klijent_id"] = "";
+            } else {
+              initialValues["session_type"] = "individualna";
+              initialValues["klijent_id"] = "";
+              initialValues["grupa_id"] = "";
+              // Try to find klijent_id from SesijaKlijent link
+              const sk = editRowData.sesijaklijent_1;
+              if (Array.isArray(sk) && sk.length > 0) {
+                initialValues["klijent_id"] = sk[0].klijent_id || "";
+              }
+            }
+          } else if (col.columnType === "grupa_clanovi") {
+            // For edit mode, we need to fetch current members
+            initialValues[col.field] = [];
+          } else if (col.columnType === "lookup") {
             if (col.type === "list") {
               const relatedArray =
                 editRowData[col.relationshipKey || col.field];
@@ -542,7 +568,13 @@ export const TableComponent: React.FC<Props> = ({
             }
           }
         } else {
-          if (col.columnType === "lookup" && col.type === "list") {
+          if (col.columnType === "session_type") {
+            initialValues["session_type"] = "individualna";
+            initialValues["klijent_id"] = "";
+            initialValues["grupa_id"] = "";
+          } else if (col.columnType === "grupa_clanovi") {
+            initialValues[col.field] = [];
+          } else if (col.columnType === "lookup" && col.type === "list") {
             initialValues[col.field] = [];
           } else {
             initialValues[col.field] = "";
@@ -552,29 +584,68 @@ export const TableComponent: React.FC<Props> = ({
       setFormValues(initialValues);
 
       const fetchLookupOptions = async () => {
-        const options: Record<string, any[]> = {};
+        const opts: Record<string, any[]> = {};
         const backendBase =
           import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+        // Fetch options for all lookup, session_type, and grupa_clanovi columns
+        const entitiesToFetch = new Set<string>();
+
         for (const col of formColumns) {
           if (col.columnType === "lookup" && col.entity) {
-            const endpoint = col.entity.toLowerCase();
-            try {
-              const response = await axios.get(`${backendBase}/${endpoint}/`);
-              if (Array.isArray(response.data)) {
-                options[endpoint] = response.data;
-              } else if (response.data && typeof response.data === "object") {
-                options[endpoint] = Array.isArray(response.data.results)
-                  ? response.data.results
-                  : [response.data];
+            entitiesToFetch.add(col.entity.toLowerCase());
+          }
+          if (col.columnType === "session_type") {
+            entitiesToFetch.add("klijent");
+            entitiesToFetch.add("grupa");
+          }
+          if (col.columnType === "grupa_clanovi" && col.entity) {
+            entitiesToFetch.add(col.entity.toLowerCase());
+          }
+        }
+
+        for (const endpoint of entitiesToFetch) {
+          try {
+            const response = await axios.get(`${backendBase}/${endpoint}/`);
+            if (Array.isArray(response.data)) {
+              opts[endpoint] = response.data;
+            } else if (response.data && typeof response.data === "object") {
+              opts[endpoint] = Array.isArray(response.data.results)
+                ? response.data.results
+                : [response.data];
+            }
+          } catch (err) {
+            console.error(`Error fetching ${endpoint} options:`, err);
+            opts[endpoint] = [];
+          }
+        }
+
+        setLookupOptions(opts);
+
+        // If editing a grupa, fetch its current members
+        if (modalMode === "edit" && editRowData) {
+          for (const col of formColumns) {
+            if (col.columnType === "grupa_clanovi") {
+              try {
+                const grupaId = editRowData.id;
+                const response = await axios.get(
+                  `${backendBase}/grupaklijent/by-grupa/${grupaId}/`,
+                );
+                if (Array.isArray(response.data)) {
+                  const memberIds = response.data.map((gk: any) =>
+                    String(gk.klijent_id),
+                  );
+                  setFormValues((fv) => ({
+                    ...fv,
+                    [col.field]: memberIds,
+                  }));
+                }
+              } catch (err) {
+                console.error("Error fetching group members:", err);
               }
-            } catch (err) {
-              console.error(`Error fetching ${endpoint} options:`, err);
-              options[endpoint] = [];
             }
           }
         }
-        setLookupOptions(options);
       };
 
       fetchLookupOptions();
@@ -639,6 +710,443 @@ export const TableComponent: React.FC<Props> = ({
 
   const getRowId = (row: any) => {
     return row?.id ?? row?.ID ?? row?.Id ?? Object.values(row)[0];
+  };
+
+  // Helper to render a form field based on column type
+  const renderFormField = (col: TableColumn) => {
+    // ============================================
+    // SESSION TYPE: radio toggle + dropdown
+    // ============================================
+    if (col.columnType === "session_type") {
+      const sessionType = formValues["session_type"] || "individualna";
+      const klijentOptions = lookupOptions["klijent"] || [];
+      const grupaOptions = lookupOptions["grupa"] || [];
+
+      return (
+        <div key={col.field} className="table-form-group">
+          <label className="table-form-label">
+            {col.label}
+            <span className="table-form-required">*</span>
+          </label>
+
+          {/* Radio buttons */}
+          <div
+            style={{
+              display: "flex",
+              gap: "0",
+              marginBottom: "12px",
+              borderRadius: "10px",
+              overflow: "hidden",
+              border: "1.5px solid #e2e8f0",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setFormValues((fv) => ({
+                  ...fv,
+                  session_type: "individualna",
+                  klijent_id: fv.klijent_id || "",
+                  grupa_id: "",
+                }));
+              }}
+              style={{
+                flex: 1,
+                padding: "10px 16px",
+                border: "none",
+                background:
+                  sessionType === "individualna"
+                    ? "linear-gradient(135deg, #6366f1, #7c3aed)"
+                    : "#f8fafc",
+                color: sessionType === "individualna" ? "#fff" : "#64748b",
+                fontWeight: 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                fontFamily: "inherit",
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              Individualna
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFormValues((fv) => ({
+                  ...fv,
+                  session_type: "grupa",
+                  klijent_id: "",
+                  grupa_id: fv.grupa_id || "",
+                }));
+              }}
+              style={{
+                flex: 1,
+                padding: "10px 16px",
+                border: "none",
+                borderLeft: "1.5px solid #e2e8f0",
+                background:
+                  sessionType === "grupa"
+                    ? "linear-gradient(135deg, #6366f1, #7c3aed)"
+                    : "#f8fafc",
+                color: sessionType === "grupa" ? "#fff" : "#64748b",
+                fontWeight: 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                fontFamily: "inherit",
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Grupna
+            </button>
+          </div>
+
+          {/* Dropdown for selected type */}
+          {sessionType === "individualna" ? (
+            <select
+              value={formValues["klijent_id"] ?? ""}
+              onChange={(e) =>
+                setFormValues((fv) => ({
+                  ...fv,
+                  klijent_id: e.target.value,
+                }))
+              }
+              className="table-form-select"
+            >
+              <option value="">-- Izaberi klijenta --</option>
+              {klijentOptions.map((k: any) => (
+                <option key={k.id} value={k.id}>
+                  {k.ime} {k.prezime}
+                  {k.email ? ` (${k.email})` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={formValues["grupa_id"] ?? ""}
+              onChange={(e) =>
+                setFormValues((fv) => ({
+                  ...fv,
+                  grupa_id: e.target.value,
+                }))
+              }
+              className="table-form-select"
+            >
+              <option value="">-- Izaberi grupu --</option>
+              {grupaOptions.map((g: any) => (
+                <option key={g.id} value={g.id}>
+                  {g.naziv}
+                  {g.broj_clanova !== undefined
+                    ? ` (${g.broj_clanova} članova)`
+                    : ""}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      );
+    }
+
+    // ============================================
+    // GRUPA CLANOVI: multi-select checkbox list of klijenti
+    // ============================================
+    if (col.columnType === "grupa_clanovi") {
+      const entityKey = (col.entity || "klijent").toLowerCase();
+      const opts = lookupOptions[entityKey] || [];
+      const selectedValues: string[] = formValues[col.field] || [];
+
+      return (
+        <div key={col.field} className="table-form-group">
+          <label className="table-form-label">
+            {col.label}
+            {col.required && <span className="table-form-required">*</span>}
+            <span className="table-form-hint">
+              ({selectedValues.length} izabrano)
+            </span>
+          </label>
+          <div className="table-form-checkbox-list">
+            {opts.length === 0 ? (
+              <div className="table-form-no-options">
+                Nema dostupnih klijenata
+              </div>
+            ) : (
+              opts.map((klijent: any) => {
+                const isChecked = selectedValues.includes(String(klijent.id));
+                return (
+                  <div
+                    key={klijent.id}
+                    className={`table-form-checkbox-item ${isChecked ? "checked" : ""}`}
+                    onClick={() => {
+                      const valueStr = String(klijent.id);
+                      const newSelected = isChecked
+                        ? selectedValues.filter((v: string) => v !== valueStr)
+                        : [...selectedValues, valueStr];
+                      setFormValues((fv) => ({
+                        ...fv,
+                        [col.field]: newSelected,
+                      }));
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}}
+                      className="table-form-checkbox"
+                    />
+                    <span className="table-form-checkbox-label">
+                      {klijent.ime} {klijent.prezime}
+                      {klijent.email ? ` — ${klijent.email}` : ""}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ============================================
+    // LOOKUP (existing logic)
+    // ============================================
+    if (col.columnType === "lookup" && col.entity) {
+      const endpoint = col.entity.toLowerCase();
+      const opts = lookupOptions[endpoint] || [];
+
+      if (col.type === "list") {
+        const selectedValues = formValues[col.field] || [];
+
+        return (
+          <div key={col.field} className="table-form-group">
+            <label className="table-form-label">
+              {col.label}
+              {col.required && <span className="table-form-required">*</span>}
+              <span className="table-form-hint">
+                ({selectedValues.length} selected)
+              </span>
+            </label>
+            <div className="table-form-checkbox-list">
+              {opts.length === 0 ? (
+                <div className="table-form-no-options">
+                  No options available
+                </div>
+              ) : (
+                opts.map((option: any) => {
+                  const isChecked = selectedValues.includes(String(option.id));
+                  return (
+                    <div
+                      key={option.id}
+                      className={`table-form-checkbox-item ${isChecked ? "checked" : ""}`}
+                      onClick={() => {
+                        const valueStr = String(option.id);
+                        const newSelected = isChecked
+                          ? selectedValues.filter((v: string) => v !== valueStr)
+                          : [...selectedValues, valueStr];
+                        setFormValues((fv) => ({
+                          ...fv,
+                          [col.field]: newSelected,
+                        }));
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        className="table-form-checkbox"
+                      />
+                      <span className="table-form-checkbox-label">
+                        {(col.lookupField && option[col.lookupField]) ||
+                          option.pages ||
+                          option.stock ||
+                          option.title ||
+                          `ID: ${option.id}`}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div key={col.field} className="table-form-group">
+          <label
+            htmlFor={`modal-input-${col.field}`}
+            className="table-form-label"
+          >
+            {col.label}
+            {col.required && <span className="table-form-required">*</span>}
+          </label>
+          <select
+            id={`modal-input-${col.field}`}
+            value={formValues[col.field] ?? ""}
+            onChange={(e) =>
+              setFormValues((fv) => ({
+                ...fv,
+                [col.field]: e.target.value,
+              }))
+            }
+            className="table-form-select"
+          >
+            <option value="">-- Select {col.label} --</option>
+            {opts.map((option: any) => (
+              <option key={option.id} value={option.id}>
+                {(col.lookupField && option[col.lookupField]) ||
+                  option.pages ||
+                  option.stock ||
+                  option.title ||
+                  `ID: ${option.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    // ============================================
+    // ENUM
+    // ============================================
+    if (col.type === "enum" && col.options && col.options.length > 0) {
+      return (
+        <div key={col.field} className="table-form-group">
+          <label
+            htmlFor={`modal-input-${col.field}`}
+            className="table-form-label"
+          >
+            {col.label}
+            {col.required && <span className="table-form-required">*</span>}
+          </label>
+          <select
+            id={`modal-input-${col.field}`}
+            value={formValues[col.field] ?? ""}
+            onChange={(e) =>
+              setFormValues((fv) => ({
+                ...fv,
+                [col.field]: e.target.value,
+              }))
+            }
+            className="table-form-select"
+          >
+            <option value="">-- Select {col.label} --</option>
+            {col.options.map((option: string) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    // ============================================
+    // BOOLEAN
+    // ============================================
+    if (col.type === "bool" || col.type === "boolean") {
+      return (
+        <div key={col.field} className="table-form-group-row">
+          <input
+            id={`modal-input-${col.field}`}
+            type="checkbox"
+            checked={formValues[col.field] ?? false}
+            onChange={(e) =>
+              setFormValues((fv) => ({
+                ...fv,
+                [col.field]: e.target.checked,
+              }))
+            }
+            className="table-form-checkbox"
+          />
+          <label
+            htmlFor={`modal-input-${col.field}`}
+            className="table-form-label"
+            style={{ cursor: "pointer" }}
+          >
+            {col.label}
+            {col.required && <span className="table-form-required">*</span>}
+          </label>
+        </div>
+      );
+    }
+
+    // ============================================
+    // DEFAULT: text/number/date input
+    // ============================================
+    return (
+      <div key={col.field} className="table-form-group">
+        <label
+          htmlFor={`modal-input-${col.field}`}
+          className="table-form-label"
+        >
+          {col.label}
+          {col.required && <span className="table-form-required">*</span>}
+          {col.type && col.type !== "string" && col.type !== "str" && (
+            <span className="table-form-hint">
+              ({col.type === "list" ? "comma-separated" : col.type})
+            </span>
+          )}
+        </label>
+        <input
+          id={`modal-input-${col.field}`}
+          type={
+            col.type === "int" || col.type === "float"
+              ? "number"
+              : col.type === "date"
+                ? "date"
+                : col.type === "datetime"
+                  ? "datetime-local"
+                  : col.type === "time"
+                    ? "time"
+                    : "text"
+          }
+          step={col.type === "float" ? "any" : undefined}
+          value={formValues[col.field] ?? ""}
+          onChange={(e) =>
+            setFormValues((fv) => ({
+              ...fv,
+              [col.field]: e.target.value,
+            }))
+          }
+          placeholder={col.type === "list" ? "item1, item2, item3" : ""}
+          className="table-form-input"
+        />
+      </div>
+    );
   };
 
   return (
@@ -741,7 +1249,18 @@ export const TableComponent: React.FC<Props> = ({
                   const missingFields: string[] = [];
                   formColumns.forEach((col) => {
                     if (col.required) {
-                      if (col.columnType === "lookup") {
+                      if (col.columnType === "session_type") {
+                        const st = formValues["session_type"];
+                        if (
+                          st === "individualna" &&
+                          !formValues["klijent_id"]
+                        ) {
+                          missingFields.push("Klijent");
+                        }
+                        if (st === "grupa" && !formValues["grupa_id"]) {
+                          missingFields.push("Grupa");
+                        }
+                      } else if (col.columnType === "lookup") {
                         if (col.type === "list") {
                           const value = formValues[col.field];
                           if (
@@ -756,6 +1275,8 @@ export const TableComponent: React.FC<Props> = ({
                             missingFields.push(col.label);
                           }
                         }
+                      } else if (col.columnType === "grupa_clanovi") {
+                        // Not required for now
                       } else {
                         const value = formValues[col.field];
                         if (
@@ -771,7 +1292,7 @@ export const TableComponent: React.FC<Props> = ({
 
                   if (missingFields.length > 0) {
                     setValidationError(
-                      `Please fill in the following required fields: ${missingFields.join(", ")}`,
+                      `Popunite sledeća obavezna polja: ${missingFields.join(", ")}`,
                     );
                     return;
                   }
@@ -783,13 +1304,32 @@ export const TableComponent: React.FC<Props> = ({
 
                   const processedValues: Record<string, any> = {};
                   formColumns.forEach((col) => {
-                    if (col.columnType === "lookup" && col.path) {
+                    if (col.columnType === "session_type") {
+                      // Add klijent_id or grupa_id based on session type
+                      const st = formValues["session_type"];
+                      if (st === "individualna") {
+                        const kId = parseInt(formValues["klijent_id"], 10);
+                        processedValues["klijent_id"] = isNaN(kId) ? null : kId;
+                        processedValues["grupa_id"] = null;
+                      } else {
+                        const gId = parseInt(formValues["grupa_id"], 10);
+                        processedValues["grupa_id"] = isNaN(gId) ? null : gId;
+                        processedValues["klijent_id"] = null;
+                      }
+                    } else if (col.columnType === "grupa_clanovi") {
+                      const value = formValues[col.field];
+                      processedValues[col.field] = Array.isArray(value)
+                        ? value
+                            .map((v: string) => parseInt(v, 10))
+                            .filter((v: number) => !isNaN(v))
+                        : [];
+                    } else if (col.columnType === "lookup" && col.path) {
                       if (col.type === "list") {
                         const value = formValues[col.field];
                         processedValues[col.path] = Array.isArray(value)
                           ? value
-                              .map((v) => parseInt(v, 10))
-                              .filter((v) => !isNaN(v))
+                              .map((v: string) => parseInt(v, 10))
+                              .filter((v: number) => !isNaN(v))
                           : [];
                       } else {
                         const value = formValues[col.field];
@@ -803,8 +1343,8 @@ export const TableComponent: React.FC<Props> = ({
                           typeof value === "string"
                             ? value
                                 .split(",")
-                                .map((item) => item.trim())
-                                .filter((item) => item !== "")
+                                .map((item: string) => item.trim())
+                                .filter((item: string) => item !== "")
                             : Array.isArray(value)
                               ? value
                               : [];
@@ -861,11 +1401,13 @@ export const TableComponent: React.FC<Props> = ({
                           setValidationError(err.response.data.message);
                         } else {
                           setValidationError(
-                            "Failed to save. Please check your input.",
+                            "Greška pri čuvanju. Proverite unos.",
                           );
                         }
                       } else {
-                        setValidationError("Network error. Please try again.");
+                        setValidationError(
+                          "Greška na mreži. Pokušajte ponovo.",
+                        );
                       }
                       return;
                     }
@@ -903,11 +1445,13 @@ export const TableComponent: React.FC<Props> = ({
                           setValidationError(err.response.data.message);
                         } else {
                           setValidationError(
-                            "Failed to update. Please check your input.",
+                            "Greška pri ažuriranju. Proverite unos.",
                           );
                         }
                       } else {
-                        setValidationError("Network error. Please try again.");
+                        setValidationError(
+                          "Greška na mreži. Pokušajte ponovo.",
+                        );
                       }
                       return;
                     }
@@ -916,228 +1460,7 @@ export const TableComponent: React.FC<Props> = ({
                 className="table-modal-form"
               >
                 <div className="cal-modal-body">
-                  {formColumns.map((col) => {
-                    if (col.columnType === "lookup" && col.entity) {
-                      const endpoint = col.entity.toLowerCase();
-                      const opts = lookupOptions[endpoint] || [];
-
-                      if (col.type === "list") {
-                        const selectedValues = formValues[col.field] || [];
-
-                        return (
-                          <div key={col.field} className="table-form-group">
-                            <label className="table-form-label">
-                              {col.label}
-                              {col.required && (
-                                <span className="table-form-required">*</span>
-                              )}
-                              <span className="table-form-hint">
-                                ({selectedValues.length} selected)
-                              </span>
-                            </label>
-                            <div className="table-form-checkbox-list">
-                              {opts.length === 0 ? (
-                                <div className="table-form-no-options">
-                                  No options available
-                                </div>
-                              ) : (
-                                opts.map((option: any) => {
-                                  const isChecked = selectedValues.includes(
-                                    String(option.id),
-                                  );
-                                  return (
-                                    <div
-                                      key={option.id}
-                                      className={`table-form-checkbox-item ${isChecked ? "checked" : ""}`}
-                                      onClick={() => {
-                                        const valueStr = String(option.id);
-                                        const newSelected = isChecked
-                                          ? selectedValues.filter(
-                                              (v: string) => v !== valueStr,
-                                            )
-                                          : [...selectedValues, valueStr];
-                                        setFormValues((fv) => ({
-                                          ...fv,
-                                          [col.field]: newSelected,
-                                        }));
-                                      }}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={() => {}}
-                                        className="table-form-checkbox"
-                                      />
-                                      <span className="table-form-checkbox-label">
-                                        {(col.lookupField &&
-                                          option[col.lookupField]) ||
-                                          option.pages ||
-                                          option.stock ||
-                                          option.title ||
-                                          `ID: ${option.id}`}
-                                      </span>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={col.field} className="table-form-group">
-                          <label
-                            htmlFor={`modal-input-${col.field}`}
-                            className="table-form-label"
-                          >
-                            {col.label}
-                            {col.required && (
-                              <span className="table-form-required">*</span>
-                            )}
-                          </label>
-                          <select
-                            id={`modal-input-${col.field}`}
-                            value={formValues[col.field] ?? ""}
-                            onChange={(e) =>
-                              setFormValues((fv) => ({
-                                ...fv,
-                                [col.field]: e.target.value,
-                              }))
-                            }
-                            className="table-form-select"
-                          >
-                            <option value="">-- Select {col.label} --</option>
-                            {opts.map((option: any) => (
-                              <option key={option.id} value={option.id}>
-                                {(col.lookupField && option[col.lookupField]) ||
-                                  option.pages ||
-                                  option.stock ||
-                                  option.title ||
-                                  `ID: ${option.id}`}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-
-                    if (
-                      col.type === "enum" &&
-                      col.options &&
-                      col.options.length > 0
-                    ) {
-                      return (
-                        <div key={col.field} className="table-form-group">
-                          <label
-                            htmlFor={`modal-input-${col.field}`}
-                            className="table-form-label"
-                          >
-                            {col.label}
-                            {col.required && (
-                              <span className="table-form-required">*</span>
-                            )}
-                          </label>
-                          <select
-                            id={`modal-input-${col.field}`}
-                            value={formValues[col.field] ?? ""}
-                            onChange={(e) =>
-                              setFormValues((fv) => ({
-                                ...fv,
-                                [col.field]: e.target.value,
-                              }))
-                            }
-                            className="table-form-select"
-                          >
-                            <option value="">-- Select {col.label} --</option>
-                            {col.options.map((option: string) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-
-                    if (col.type === "bool" || col.type === "boolean") {
-                      return (
-                        <div key={col.field} className="table-form-group-row">
-                          <input
-                            id={`modal-input-${col.field}`}
-                            type="checkbox"
-                            checked={formValues[col.field] ?? false}
-                            onChange={(e) =>
-                              setFormValues((fv) => ({
-                                ...fv,
-                                [col.field]: e.target.checked,
-                              }))
-                            }
-                            className="table-form-checkbox"
-                          />
-                          <label
-                            htmlFor={`modal-input-${col.field}`}
-                            className="table-form-label"
-                            style={{ cursor: "pointer" }}
-                          >
-                            {col.label}
-                            {col.required && (
-                              <span className="table-form-required">*</span>
-                            )}
-                          </label>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={col.field} className="table-form-group">
-                        <label
-                          htmlFor={`modal-input-${col.field}`}
-                          className="table-form-label"
-                        >
-                          {col.label}
-                          {col.required && (
-                            <span className="table-form-required">*</span>
-                          )}
-                          {col.type && col.type !== "string" && (
-                            <span className="table-form-hint">
-                              (
-                              {col.type === "list"
-                                ? "comma-separated"
-                                : col.type}
-                              )
-                            </span>
-                          )}
-                        </label>
-                        <input
-                          id={`modal-input-${col.field}`}
-                          type={
-                            col.type === "int" || col.type === "float"
-                              ? "number"
-                              : col.type === "date"
-                                ? "date"
-                                : col.type === "datetime"
-                                  ? "datetime-local"
-                                  : col.type === "time"
-                                    ? "time"
-                                    : "text"
-                          }
-                          step={col.type === "float" ? "any" : undefined}
-                          value={formValues[col.field] ?? ""}
-                          onChange={(e) =>
-                            setFormValues((fv) => ({
-                              ...fv,
-                              [col.field]: e.target.value,
-                            }))
-                          }
-                          placeholder={
-                            col.type === "list" ? "item1, item2, item3" : ""
-                          }
-                          className="table-form-input"
-                        />
-                      </div>
-                    );
-                  })}
+                  {formColumns.map((col) => renderFormField(col))}
                 </div>
 
                 <div className="cal-modal-footer">
