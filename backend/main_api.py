@@ -166,7 +166,7 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
     })
 
     # Email za klijenta (samo ako ima email i ako je zakazivanje)
-    if client_email:
+    if client_email and action == "created":
         client_html = f"""
     <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
     <div style="max-width:520px;margin:auto;">
