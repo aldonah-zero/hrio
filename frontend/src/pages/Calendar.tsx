@@ -494,8 +494,9 @@ const sessionGroupMap = useMemo(() => {
                             >
                               <div className="cal-session-content">
                                 <span className="cal-session-name">
-                                  sessionClientMap[s.id] ||
-                                  sessionGroupMap[s.id] || ""{" "}
+                                  {sessionClientMap[s.id] ||
+                                    sessionGroupMap[s.id] ||
+                                    ""}
                                 </span>
                                 <span className="cal-session-time">
                                   {formatTime(start)} - {formatTime(end)}
@@ -574,9 +575,11 @@ const sessionGroupMap = useMemo(() => {
                               openEditSession(s);
                             }}
                           >
-                            {sessionClientMap[s.id] && (
+                            {(sessionClientMap[s.id] ||
+                              sessionGroupMap[s.id]) && (
                               <span className="cal-agenda-item-name">
-                                {sessionClientMap[s.id]}
+                                {sessionClientMap[s.id] ||
+                                  sessionGroupMap[s.id]}
                               </span>
                             )}
                             <span className="cal-agenda-item-time">
@@ -650,7 +653,7 @@ const sessionGroupMap = useMemo(() => {
                             e.stopPropagation();
                             openEditSession(s);
                           }}
-                          title={`${sessionClientMap[s.id] ? sessionClientMap[s.id] + " — " : ""}${formatTime(new Date(s.pocetak))} - ${s.cena} RSD`}
+                          title={`${sessionClientMap[s.id] || sessionGroupMap[s.id] || ""} — ${formatTime(new Date(s.pocetak))} - ${s.cena} RSD`}
                         />
                       );
                     })}
