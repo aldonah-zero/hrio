@@ -155,8 +155,9 @@ const fetchGroups = async () => {
       fetchSessions();
       fetchClients();
       fetchGroups();
-      fetchSessionGroups();
       fetchLinks();
+      fetchSessionGroups();
+
     }, []);
 
   // Build a map: sessionId → client name(s)
@@ -189,9 +190,9 @@ const sessionGroupMap = useMemo(() => {
   });
 
   sessionGroups.forEach((link) => {
-    const group = groupMap[link.grupa_id];
+    const group = groupMap[link.grupa]; // <-- promena
     if (group) {
-      map[link.sesija_id] = `Grupa: ${group.naziv}`;
+      map[link.sesija] = `Grupa: ${group.naziv}`; // <-- promena
     }
   });
 
