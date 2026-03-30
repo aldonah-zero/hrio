@@ -38,26 +38,33 @@ class SesijaCreate(BaseModel):
     status: str
     id: int
     pocetak: datetime
-    klijent_id: Optional[int] = None
+    klijent_id: Optional[int] = None                 # For individual sessions
+    grupa_id: Optional[int] = None                   # For group sessions
     kraj: datetime
-    uplate: Optional[List[int]] = None               # FIXED: was 'cena' (conflict!), now 'uplate' - 1:N Relationship to Cena
+    uplate: Optional[List[int]] = None               # 1:N Relationship to Cena
     sesijaklijent_1: Optional[List[int]] = None      # 1:N Relationship
     sesijagrupa_1: Optional[List[int]] = None        # 1:N Relationship
 
 
 class GrupaCreate(BaseModel):
-    opis: str
+    opis: Optional[str] = None
     id: int
     cena: float
     naziv: str
-    sesijagrupa: Optional[List[int]] = None  # 1:N Relationship
+    sesijagrupa: Optional[List[int]] = None          # 1:N Relationship
+    clanovi: Optional[List[int]] = None              # List of klijent IDs who are members of this group
 
 
 class KlijentCreate(BaseModel):
     ime: str
-    email: str
-    id: int
+    email: Optional[str] = None                      # Optional - if provided, client gets email notifications
+    id: Optional[int] = None                         # Optional - auto-increment if not provided
     prezime: str
-    broj_telefona: str
-    sesijaklijent: Optional[List[int]] = None  # 1:N Relationship
-    cena_1: Optional[List[int]] = None  # 1:N Relationship
+    broj_telefona: Optional[str] = None              # Optional
+    sesijaklijent: Optional[List[int]] = None        # 1:N Relationship
+    cena_1: Optional[List[int]] = None               # 1:N Relationship
+
+
+class GrupaKlijentCreate(BaseModel):
+    grupa_id: Optional[int] = None
+    klijent_id: Optional[int] = None

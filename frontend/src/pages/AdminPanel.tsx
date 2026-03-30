@@ -84,52 +84,6 @@ const tabs = [
       </svg>
     ),
   },
-  {
-    key: "sesijaklijent",
-    label: "Sesija-Klijent",
-    mobileLabel: "S-K",
-    icon: (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="16 3 21 3 21 8" />
-        <line x1="4" y1="20" x2="21" y2="3" />
-        <polyline points="21 16 21 21 16 21" />
-        <line x1="15" y1="15" x2="21" y2="21" />
-        <line x1="4" y1="4" x2="9" y2="9" />
-      </svg>
-    ),
-  },
-  {
-    key: "sesijagrupa",
-    label: "Sesija-Grupa",
-    mobileLabel: "S-G",
-    icon: (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="16 3 21 3 21 8" />
-        <line x1="4" y1="20" x2="21" y2="3" />
-        <polyline points="21 16 21 21 16 21" />
-        <line x1="15" y1="15" x2="21" y2="21" />
-        <line x1="4" y1="4" x2="9" y2="9" />
-      </svg>
-    ),
-  },
 ];
 
 const tableConfigs: Record<string, any> = {
@@ -163,24 +117,17 @@ const tableConfigs: Record<string, any> = {
           column_type: "field",
           field: "broj_telefona",
           type: "str",
-          required: true,
+          required: false,
         },
         {
           label: "Email",
           column_type: "field",
           field: "email",
           type: "str",
-          required: true,
+          required: false,
         },
       ],
       formColumns: [
-        {
-          column_type: "field",
-          field: "id",
-          label: "ID",
-          type: "int",
-          required: true,
-        },
         {
           column_type: "field",
           field: "ime",
@@ -200,31 +147,13 @@ const tableConfigs: Record<string, any> = {
           field: "broj_telefona",
           label: "Broj Telefona",
           type: "str",
-          required: true,
+          required: false,
         },
         {
           column_type: "field",
           field: "email",
           label: "Email",
           type: "str",
-          required: true,
-        },
-        {
-          column_type: "lookup",
-          path: "sesijaklijent",
-          field: "sesijaklijent",
-          lookup_field: "id",
-          entity: "SesijaKlijent",
-          type: "list",
-          required: false,
-        },
-        {
-          column_type: "lookup",
-          path: "cena_1",
-          field: "cena_1",
-          lookup_field: "id",
-          entity: "Cena",
-          type: "list",
           required: false,
         },
       ],
@@ -242,13 +171,12 @@ const tableConfigs: Record<string, any> = {
       actionButtons: true,
       columns: [
         {
-          label: "Klijent",
+          label: "Klijent / Grupa",
           column_type: "field",
           field: "klijent_ime",
           type: "str",
           required: false,
         },
-
         {
           label: "Početak",
           column_type: "field",
@@ -280,10 +208,10 @@ const tableConfigs: Record<string, any> = {
       ],
       formColumns: [
         {
-          column_type: "field",
-          field: "id",
-          label: "ID",
-          type: "int",
+          column_type: "session_type_selector",
+          field: "session_type",
+          label: "Tip sesije",
+          type: "str",
           required: true,
         },
         {
@@ -313,33 +241,6 @@ const tableConfigs: Record<string, any> = {
           label: "Status",
           type: "str",
           required: true,
-        },
-        {
-          column_type: "lookup",
-          path: "sesijaklijent",
-          field: "sesijaklijent",
-          lookup_field: "id",
-          entity: "SesijaKlijent",
-          type: "list",
-          required: false,
-        },
-        {
-          column_type: "lookup",
-          path: "sesijagrupa",
-          field: "sesijagrupa",
-          lookup_field: "id",
-          entity: "SesijaGrupa",
-          type: "list",
-          required: false,
-        },
-        {
-          column_type: "lookup",
-          path: "cena_1",
-          field: "cena_1",
-          lookup_field: "id",
-          entity: "Cena",
-          type: "list",
-          required: false,
         },
       ],
     },
@@ -356,13 +257,6 @@ const tableConfigs: Record<string, any> = {
       actionButtons: true,
       columns: [
         {
-          label: "ID",
-          column_type: "field",
-          field: "id",
-          type: "int",
-          required: true,
-        },
-        {
           label: "Naziv",
           column_type: "field",
           field: "naziv",
@@ -383,15 +277,22 @@ const tableConfigs: Record<string, any> = {
           type: "float",
           required: true,
         },
+        {
+          label: "Članovi",
+          column_type: "field",
+          field: "clanovi_imena",
+          type: "str",
+          required: false,
+        },
+        {
+          label: "Br. članova",
+          column_type: "field",
+          field: "broj_clanova",
+          type: "int",
+          required: false,
+        },
       ],
       formColumns: [
-        {
-          column_type: "field",
-          field: "id",
-          label: "ID",
-          type: "int",
-          required: true,
-        },
         {
           column_type: "field",
           field: "naziv",
@@ -404,7 +305,7 @@ const tableConfigs: Record<string, any> = {
           field: "opis",
           label: "Opis",
           type: "str",
-          required: true,
+          required: false,
         },
         {
           column_type: "field",
@@ -414,11 +315,9 @@ const tableConfigs: Record<string, any> = {
           required: true,
         },
         {
-          column_type: "lookup",
-          path: "sesijagrupa",
-          field: "sesijagrupa",
-          lookup_field: "id",
-          entity: "SesijaGrupa",
+          column_type: "multi_select_klijent",
+          field: "clanovi",
+          label: "Članovi grupe",
           type: "list",
           required: false,
         },
@@ -507,102 +406,6 @@ const tableConfigs: Record<string, any> = {
           label: "Status",
           type: "str",
           required: true,
-        },
-      ],
-    },
-  },
-  sesijaklijent: {
-    title: "Sesija-Klijent Veze",
-    entity: "SesijaKlijent",
-    endpoint: "/sesijaklijent/",
-    options: {
-      showHeader: true,
-      stripedRows: false,
-      showPagination: true,
-      rowsPerPage: 10,
-      actionButtons: true,
-      columns: [
-        {
-          label: "ID",
-          column_type: "field",
-          field: "id",
-          type: "int",
-          required: true,
-        },
-      ],
-      formColumns: [
-        {
-          column_type: "field",
-          field: "id",
-          label: "ID",
-          type: "int",
-          required: true,
-        },
-        {
-          column_type: "lookup",
-          path: "klijent",
-          field: "klijent",
-          lookup_field: "id",
-          entity: "Klijent",
-          type: "int",
-          required: false,
-        },
-        {
-          column_type: "lookup",
-          path: "sesija",
-          field: "sesija",
-          lookup_field: "id",
-          entity: "Sesija",
-          type: "int",
-          required: false,
-        },
-      ],
-    },
-  },
-  sesijagrupa: {
-    title: "Sesija-Grupa Veze",
-    entity: "SesijaGrupa",
-    endpoint: "/sesijagrupa/",
-    options: {
-      showHeader: true,
-      stripedRows: false,
-      showPagination: true,
-      rowsPerPage: 10,
-      actionButtons: true,
-      columns: [
-        {
-          label: "ID",
-          column_type: "field",
-          field: "id",
-          type: "int",
-          required: true,
-        },
-      ],
-      formColumns: [
-        {
-          column_type: "field",
-          field: "id",
-          label: "ID",
-          type: "int",
-          required: true,
-        },
-        {
-          column_type: "lookup",
-          path: "sesija",
-          field: "sesija",
-          lookup_field: "id",
-          entity: "Sesija",
-          type: "int",
-          required: false,
-        },
-        {
-          column_type: "lookup",
-          path: "grupa",
-          field: "grupa",
-          lookup_field: "id",
-          entity: "Grupa",
-          type: "int",
-          required: false,
         },
       ],
     },

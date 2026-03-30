@@ -70,6 +70,7 @@ app = FastAPI(
         {"name": "Sesija Relationships", "description": "Manage Sesija relationships"},
         {"name": "Grupa", "description": "Operations for Grupa entities"},
         {"name": "Grupa Relationships", "description": "Manage Grupa relationships"},
+        {"name": "GrupaKlijent", "description": "Operations for GrupaKlijent (members of groups)"},
         {"name": "Klijent", "description": "Operations for Klijent entities"},
         {"name": "Klijent Relationships", "description": "Manage Klijent relationships"},
     ]
@@ -165,7 +166,7 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
         "html": html
     })
 
-    # Email za klijenta (samo ako ima email i ako je zakazivanje)
+    # Email za klijenta (samo ako ima email)
     if client_email:
         client_html = f"""
     <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
@@ -209,24 +210,132 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
             "subject": f"✅ Potvrda sesije - {format_date_long(pocetak)}",
             "html": client_html
         })
-# def send_email(subject, body):
-#
-#     sender = "igorpavlov106@gmail.com"
-#     password = "nginyrskzzjphpgk"
-#     recipient = "igorpavlov106@gmail.com"
-#
-#     msg = MIMEText(body)
-#     msg["Subject"] = subject
-#     msg["From"] = sender
-#     msg["To"] = recipient
-#
-#     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-#         server.login(sender, password)
-#         server.sendmail(sender, recipient, msg.as_string())
+
+
+def send_session_email_to_group(action, grupa_naziv, pocetak, kraj, cena, client_emails):
+    """Send session email to all members of a group who have email addresses."""
+    config = {
+        "created": {
+            "title": "Grupna sesija zakazana",
+            "greeting": "Vaša grupna sesija je potvrđena!",
+            "icon": "✅"
+        },
+        "updated": {
+            "title": "Grupna sesija izmenjena",
+            "greeting": "Vaša grupna sesija je ažurirana.",
+            "icon": "✏️"
+        },
+        "deleted": {
+            "title": "Grupna sesija otkazana",
+            "greeting": "Vaša grupna sesija je otkazana.",
+            "icon": "🗑️"
+        }
+    }
+
+    c = config[action]
+    app_url = os.getenv("APP_URL", "https://hrio-frontend-5c8704.onrender.com/")
+
+    # Email za psihologa
+    psiholog_html = f"""
+<div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
+<div style="max-width:520px;margin:auto;">
+
+<div style="background:#fff;border-radius:16px;padding:28px 24px 24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="font-size:22px;margin-bottom:8px;">{c['icon']} {c['title']}</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Zdravo, <strong>Maja</strong>.</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">{c['greeting']}</div>
+</div>
+
+<div style="background:#fff;border-radius:16px;padding:24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="border:1.5px dashed #d1d5db;border-radius:12px;padding:20px;">
+
+<div style="font-size:15px;color:#333;margin-bottom:14px;">📅 <strong>{format_date_long(pocetak)}</strong></div>
+
+<div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">Grupna sesija — {grupa_naziv}</div>
+<div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px;">{format_time(pocetak)} – {format_time(kraj)}</div>
+<div style="font-size:14px;color:#555;margin-bottom:16px;">{cena:,.2f} RSD</div>
+
+<div style="border-top:1.5px dashed #d1d5db;margin:0 0 16px;"></div>
+
+<table cellpadding="0" cellspacing="0" width="100%">
+<tr><td style="font-size:14px;color:#333;padding:3px 0;"><strong>Ukupno:</strong></td><td style="font-size:14px;color:#333;padding:3px 0;text-align:right;"><strong>{cena:,.2f} RSD</strong></td></tr>
+<tr><td style="font-size:14px;color:#333;padding:3px 0;"><strong>Status:</strong></td><td style="font-size:14px;color:#333;padding:3px 0;text-align:right;">{c['title']}</td></tr>
+</table>
+
+</div>
+</div>
+
+<div style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px;line-height:1.5;">
+<strong style="color:#6b7280;">PsihApp</strong>
+</div>
+
+</div>
+</div>
+"""
+
+    resend.Emails.send({
+        "from": "Hrio <noreply@hrioapp.com>",
+        "to": ["igorpavlov106@gmail.com"],
+        "subject": f"{c['icon']} {c['title']} - {grupa_naziv}",
+        "html": psiholog_html
+    })
+
+    # Email za svakog člana grupe koji ima email
+    for member in client_emails:
+        if not member.get("email"):
+            continue
+
+        member_name = member.get("name", "Poštovani/a")
+
+        member_html = f"""
+    <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:520px;margin:auto;">
+
+    <div style="background:#fff;border-radius:16px;padding:28px 24px 24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+    <div style="font-size:22px;margin-bottom:8px;">{c['icon']} {c['title']}</div>
+    <div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Poštovani/a <strong>{member_name}</strong>,</div>
+    <div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">{c['greeting']}</div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+    <div style="border:1.5px dashed #d1d5db;border-radius:12px;padding:20px;">
+
+    <div style="font-size:15px;color:#333;margin-bottom:14px;">📅 <strong>{format_date_long(pocetak)}</strong></div>
+    <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">Grupna sesija — {grupa_naziv}</div>
+    <div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px;">{format_time(pocetak)} – {format_time(kraj)}</div>
+
+    <div style="border-top:1.5px dashed #d1d5db;margin:16px 0;"></div>
+
+    <div style="font-size:14px;color:#555;line-height:1.6;">
+    Molimo Vas da dođete <strong>5 minuta</strong> pre zakazanog termina.
+    </div>
+
+    </div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:8px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+    <div style="font-size:13px;color:#777;line-height:1.5;"><strong>Pravila otkazivanja</strong><br>Sesija se može otkazati najkasnije <strong>24 sata</strong> pre termina.<br>Kašnjenje duže od <strong>10 minuta</strong> smatra se propuštenom sesijom.</div>
+    </div>
+
+    <div style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px;line-height:1.5;">
+    Hvala vam na poverenju. <strong style="color:#6b7280;">PsihApp</strong>
+    </div>
+
+    </div>
+    </div>
+    """
+        resend.Emails.send({
+            "from": "Hrio <noreply@hrioapp.com>",
+            "to": [member["email"]],
+            "subject": f"✅ Potvrda grupne sesije - {format_date_long(pocetak)}",
+            "html": member_html
+        })
+
+
 # Enable CORS for all origins (for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Or restrict to ["http://localhost:3000"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -282,7 +391,6 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
     """Handle database integrity errors."""
     logger.error(f"Database integrity error: {exc}")
 
-    # Extract more detailed error information
     error_detail = str(exc.orig) if hasattr(exc, 'orig') else str(exc)
 
     return JSONResponse(
@@ -372,6 +480,7 @@ def get_statistics(database: Session = Depends(get_db)):
     stats["sesija_count"] = database.query(Sesija).count()
     stats["grupa_count"] = database.query(Grupa).count()
     stats["klijent_count"] = database.query(Klijent).count()
+    stats["grupaklijent_count"] = database.query(GrupaKlijent).count()
     stats["total_entities"] = sum(stats.values())
     return stats
 
@@ -445,21 +554,17 @@ async def BAL_reduce(sequence:list, reduce_fn, aggregator) -> any:
 def get_all_cena(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
-    # Use detailed=true to get entities with eagerly loaded relationships (for tables with lookup columns)
     if detailed:
-        # Eagerly load all relationships to avoid N+1 queries
         query = database.query(Cena)
         query = query.options(joinedload(Cena.sesija_2))
         query = query.options(joinedload(Cena.klijent_1))
         cena_list = query.all()
 
-        # Serialize with relationships included
         result = []
         for cena_item in cena_list:
             item_dict = cena_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
 
-            # Add many-to-one relationships (foreign keys for lookup columns)
             if cena_item.sesija_2:
                 related_obj = cena_item.sesija_2
                 related_dict = related_obj.__dict__.copy()
@@ -475,24 +580,20 @@ def get_all_cena(detailed: bool = False, database: Session = Depends(get_db)) ->
             else:
                 item_dict['klijent_1'] = None
 
-
             result.append(item_dict)
         return result
     else:
-        # Default: return flat entities (faster for charts/widgets without lookup columns)
         return database.query(Cena).all()
 
 
 @app.get("/cena/count/", response_model=None, tags=["Cena"])
 def get_count_cena(database: Session = Depends(get_db)) -> dict:
-    """Get the total count of Cena entities"""
     count = database.query(Cena).count()
     return {"count": count}
 
 
 @app.get("/cena/paginated/", response_model=None, tags=["Cena"])
 def get_paginated_cena(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
-    """Get paginated list of Cena entities"""
     total = database.query(Cena).count()
     cena_list = database.query(Cena).offset(skip).limit(limit).all()
     return {
@@ -504,13 +605,8 @@ def get_paginated_cena(skip: int = 0, limit: int = 100, detailed: bool = False, 
 
 
 @app.get("/cena/search/", response_model=None, tags=["Cena"])
-def search_cena(
-    database: Session = Depends(get_db)
-) -> list:
-    """Search Cena entities by attributes"""
+def search_cena(database: Session = Depends(get_db)) -> list:
     query = database.query(Cena)
-
-
     results = query.all()
     return results
 
@@ -520,17 +616,11 @@ async def get_cena(cena_id: int, database: Session = Depends(get_db)) -> Cena:
     db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
     if db_cena is None:
         raise HTTPException(status_code=404, detail="Cena not found")
-
-    response_data = {
-        "cena": db_cena,
-}
-    return response_data
-
+    return {"cena": db_cena}
 
 
 @app.post("/cena/", response_model=None, tags=["Cena"])
 async def create_cena(cena_data: CenaCreate, database: Session = Depends(get_db)) -> Cena:
-
     if cena_data.sesija_2 is not None:
         db_sesija_2 = database.query(Sesija).filter(Sesija.id == cena_data.sesija_2).first()
         if not db_sesija_2:
@@ -545,36 +635,44 @@ async def create_cena(cena_data: CenaCreate, database: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="Klijent ID is required")
 
     db_cena = Cena(
-        cena=cena_data.cena,        id=cena_data.id,        status=cena_data.status,        nacin_placanja=cena_data.nacin_placanja,        datum_uplate=cena_data.datum_uplate,        sesija_2_id=cena_data.sesija_2,        klijent_1_id=cena_data.klijent_1        )
+        cena=cena_data.cena,
+        id=cena_data.id,
+        status=cena_data.status,
+        nacin_placanja=cena_data.nacin_placanja,
+        datum_uplate=cena_data.datum_uplate,
+        sesija_2_id=cena_data.sesija_2,
+        klijent_1_id=cena_data.klijent_1
+    )
 
     database.add(db_cena)
     database.commit()
     database.refresh(db_cena)
-
-
-
-
     return db_cena
 
 
 @app.post("/cena/bulk/", response_model=None, tags=["Cena"])
 async def bulk_create_cena(items: list[CenaCreate], database: Session = Depends(get_db)) -> dict:
-    """Create multiple Cena entities at once"""
     created_items = []
     errors = []
 
     for idx, item_data in enumerate(items):
         try:
-            # Basic validation for each item
             if not item_data.sesija_2:
                 raise ValueError("Sesija ID is required")
             if not item_data.klijent_1:
                 raise ValueError("Klijent ID is required")
 
             db_cena = Cena(
-                cena=item_data.cena,                id=item_data.id,                status=item_data.status,                nacin_placanja=item_data.nacin_placanja,                datum_uplate=item_data.datum_uplate,                sesija_2_id=item_data.sesija_2,                klijent_1_id=item_data.klijent_1            )
+                cena=item_data.cena,
+                id=item_data.id,
+                status=item_data.status,
+                nacin_placanja=item_data.nacin_placanja,
+                datum_uplate=item_data.datum_uplate,
+                sesija_2_id=item_data.sesija_2,
+                klijent_1_id=item_data.klijent_1
+            )
             database.add(db_cena)
-            database.flush()  # Get ID without committing
+            database.flush()
             created_items.append(db_cena.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
@@ -593,10 +691,8 @@ async def bulk_create_cena(items: list[CenaCreate], database: Session = Depends(
 
 @app.delete("/cena/bulk/", response_model=None, tags=["Cena"])
 async def bulk_delete_cena(ids: list[int], database: Session = Depends(get_db)) -> dict:
-    """Delete multiple Cena entities at once"""
     deleted_count = 0
     not_found = []
-
     for item_id in ids:
         db_cena = database.query(Cena).filter(Cena.id == item_id).first()
         if db_cena:
@@ -604,9 +700,7 @@ async def bulk_delete_cena(ids: list[int], database: Session = Depends(get_db)) 
             deleted_count += 1
         else:
             not_found.append(item_id)
-
     database.commit()
-
     return {
         "deleted_count": deleted_count,
         "not_found": not_found,
@@ -636,7 +730,6 @@ async def update_cena(cena_id: int, cena_data: CenaCreate, database: Session = D
         setattr(db_cena, 'klijent_1_id', cena_data.klijent_1)
     database.commit()
     database.refresh(db_cena)
-
     return db_cena
 
 
@@ -650,8 +743,6 @@ async def delete_cena(cena_id: int, database: Session = Depends(get_db)):
     return {"message": "Deleted", "id": cena_id}
 
 
-
-
 ############################################
 #
 #   SesijaGrupa functions
@@ -662,21 +753,17 @@ async def delete_cena(cena_id: int, database: Session = Depends(get_db)):
 def get_all_sesijagrupa(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
-    # Use detailed=true to get entities with eagerly loaded relationships (for tables with lookup columns)
     if detailed:
-        # Eagerly load all relationships to avoid N+1 queries
         query = database.query(SesijaGrupa)
         query = query.options(joinedload(SesijaGrupa.grupa))
         query = query.options(joinedload(SesijaGrupa.sesija_1))
         sesijagrupa_list = query.all()
 
-        # Serialize with relationships included
         result = []
         for sesijagrupa_item in sesijagrupa_list:
             item_dict = sesijagrupa_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
 
-            # Add many-to-one relationships (foreign keys for lookup columns)
             if sesijagrupa_item.grupa:
                 related_obj = sesijagrupa_item.grupa
                 related_dict = related_obj.__dict__.copy()
@@ -692,24 +779,20 @@ def get_all_sesijagrupa(detailed: bool = False, database: Session = Depends(get_
             else:
                 item_dict['sesija_1'] = None
 
-
             result.append(item_dict)
         return result
     else:
-        # Default: return flat entities (faster for charts/widgets without lookup columns)
         return database.query(SesijaGrupa).all()
 
 
 @app.get("/sesijagrupa/count/", response_model=None, tags=["SesijaGrupa"])
 def get_count_sesijagrupa(database: Session = Depends(get_db)) -> dict:
-    """Get the total count of SesijaGrupa entities"""
     count = database.query(SesijaGrupa).count()
     return {"count": count}
 
 
 @app.get("/sesijagrupa/paginated/", response_model=None, tags=["SesijaGrupa"])
 def get_paginated_sesijagrupa(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
-    """Get paginated list of SesijaGrupa entities"""
     total = database.query(SesijaGrupa).count()
     sesijagrupa_list = database.query(SesijaGrupa).offset(skip).limit(limit).all()
     return {
@@ -721,13 +804,8 @@ def get_paginated_sesijagrupa(skip: int = 0, limit: int = 100, detailed: bool = 
 
 
 @app.get("/sesijagrupa/search/", response_model=None, tags=["SesijaGrupa"])
-def search_sesijagrupa(
-    database: Session = Depends(get_db)
-) -> list:
-    """Search SesijaGrupa entities by attributes"""
+def search_sesijagrupa(database: Session = Depends(get_db)) -> list:
     query = database.query(SesijaGrupa)
-
-
     results = query.all()
     return results
 
@@ -737,17 +815,11 @@ async def get_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(get_d
     db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
     if db_sesijagrupa is None:
         raise HTTPException(status_code=404, detail="SesijaGrupa not found")
-
-    response_data = {
-        "sesijagrupa": db_sesijagrupa,
-}
-    return response_data
-
+    return {"sesijagrupa": db_sesijagrupa}
 
 
 @app.post("/sesijagrupa/", response_model=None, tags=["SesijaGrupa"])
 async def create_sesijagrupa(sesijagrupa_data: SesijaGrupaCreate, database: Session = Depends(get_db)) -> SesijaGrupa:
-
     if sesijagrupa_data.grupa is not None:
         db_grupa = database.query(Grupa).filter(Grupa.id == sesijagrupa_data.grupa).first()
         if not db_grupa:
@@ -762,44 +834,40 @@ async def create_sesijagrupa(sesijagrupa_data: SesijaGrupaCreate, database: Sess
         raise HTTPException(status_code=400, detail="Sesija ID is required")
 
     db_sesijagrupa = SesijaGrupa(
-        id=sesijagrupa_data.id,        grupa_id=sesijagrupa_data.grupa,        sesija_1_id=sesijagrupa_data.sesija_1        )
+        id=sesijagrupa_data.id,
+        grupa_id=sesijagrupa_data.grupa,
+        sesija_1_id=sesijagrupa_data.sesija_1
+    )
 
     database.add(db_sesijagrupa)
     database.commit()
     database.refresh(db_sesijagrupa)
-
-
-
-
     return db_sesijagrupa
 
 
 @app.post("/sesijagrupa/bulk/", response_model=None, tags=["SesijaGrupa"])
 async def bulk_create_sesijagrupa(items: list[SesijaGrupaCreate], database: Session = Depends(get_db)) -> dict:
-    """Create multiple SesijaGrupa entities at once"""
     created_items = []
     errors = []
-
     for idx, item_data in enumerate(items):
         try:
-            # Basic validation for each item
             if not item_data.grupa:
                 raise ValueError("Grupa ID is required")
             if not item_data.sesija_1:
                 raise ValueError("Sesija ID is required")
-
             db_sesijagrupa = SesijaGrupa(
-                id=item_data.id,                grupa_id=item_data.grupa,                sesija_1_id=item_data.sesija_1            )
+                id=item_data.id,
+                grupa_id=item_data.grupa,
+                sesija_1_id=item_data.sesija_1
+            )
             database.add(db_sesijagrupa)
-            database.flush()  # Get ID without committing
+            database.flush()
             created_items.append(db_sesijagrupa.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
-
     if errors:
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
-
     database.commit()
     return {
         "created_count": len(created_items),
@@ -810,10 +878,8 @@ async def bulk_create_sesijagrupa(items: list[SesijaGrupaCreate], database: Sess
 
 @app.delete("/sesijagrupa/bulk/", response_model=None, tags=["SesijaGrupa"])
 async def bulk_delete_sesijagrupa(ids: list[int], database: Session = Depends(get_db)) -> dict:
-    """Delete multiple SesijaGrupa entities at once"""
     deleted_count = 0
     not_found = []
-
     for item_id in ids:
         db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == item_id).first()
         if db_sesijagrupa:
@@ -821,9 +887,7 @@ async def bulk_delete_sesijagrupa(ids: list[int], database: Session = Depends(ge
             deleted_count += 1
         else:
             not_found.append(item_id)
-
     database.commit()
-
     return {
         "deleted_count": deleted_count,
         "not_found": not_found,
@@ -835,7 +899,6 @@ async def update_sesijagrupa(sesijagrupa_id: int, sesijagrupa_data: SesijaGrupaC
     db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
     if db_sesijagrupa is None:
         raise HTTPException(status_code=404, detail="SesijaGrupa not found")
-
     setattr(db_sesijagrupa, 'id', sesijagrupa_data.id)
     if sesijagrupa_data.grupa is not None:
         db_grupa = database.query(Grupa).filter(Grupa.id == sesijagrupa_data.grupa).first()
@@ -849,7 +912,6 @@ async def update_sesijagrupa(sesijagrupa_id: int, sesijagrupa_data: SesijaGrupaC
         setattr(db_sesijagrupa, 'sesija_1_id', sesijagrupa_data.sesija_1)
     database.commit()
     database.refresh(db_sesijagrupa)
-
     return db_sesijagrupa
 
 
@@ -863,8 +925,6 @@ async def delete_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(ge
     return {"message": "Deleted", "id": sesijagrupa_id}
 
 
-
-
 ############################################
 #
 #   SesijaKlijent functions
@@ -875,21 +935,17 @@ async def delete_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(ge
 def get_all_sesijaklijent(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
-    # Use detailed=true to get entities with eagerly loaded relationships (for tables with lookup columns)
     if detailed:
-        # Eagerly load all relationships to avoid N+1 queries
         query = database.query(SesijaKlijent)
         query = query.options(joinedload(SesijaKlijent.klijent))
         query = query.options(joinedload(SesijaKlijent.sesija))
         sesijaklijent_list = query.all()
 
-        # Serialize with relationships included
         result = []
         for sesijaklijent_item in sesijaklijent_list:
             item_dict = sesijaklijent_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
 
-            # Add many-to-one relationships (foreign keys for lookup columns)
             if sesijaklijent_item.klijent:
                 related_obj = sesijaklijent_item.klijent
                 related_dict = related_obj.__dict__.copy()
@@ -905,24 +961,20 @@ def get_all_sesijaklijent(detailed: bool = False, database: Session = Depends(ge
             else:
                 item_dict['sesija'] = None
 
-
             result.append(item_dict)
         return result
     else:
-        # Default: return flat entities (faster for charts/widgets without lookup columns)
         return database.query(SesijaKlijent).all()
 
 
 @app.get("/sesijaklijent/count/", response_model=None, tags=["SesijaKlijent"])
 def get_count_sesijaklijent(database: Session = Depends(get_db)) -> dict:
-    """Get the total count of SesijaKlijent entities"""
     count = database.query(SesijaKlijent).count()
     return {"count": count}
 
 
 @app.get("/sesijaklijent/paginated/", response_model=None, tags=["SesijaKlijent"])
 def get_paginated_sesijaklijent(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
-    """Get paginated list of SesijaKlijent entities"""
     total = database.query(SesijaKlijent).count()
     sesijaklijent_list = database.query(SesijaKlijent).offset(skip).limit(limit).all()
     return {
@@ -934,13 +986,8 @@ def get_paginated_sesijaklijent(skip: int = 0, limit: int = 100, detailed: bool 
 
 
 @app.get("/sesijaklijent/search/", response_model=None, tags=["SesijaKlijent"])
-def search_sesijaklijent(
-    database: Session = Depends(get_db)
-) -> list:
-    """Search SesijaKlijent entities by attributes"""
+def search_sesijaklijent(database: Session = Depends(get_db)) -> list:
     query = database.query(SesijaKlijent)
-
-
     results = query.all()
     return results
 
@@ -950,17 +997,11 @@ async def get_sesijaklijent(sesijaklijent_id: int, database: Session = Depends(g
     db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
     if db_sesijaklijent is None:
         raise HTTPException(status_code=404, detail="SesijaKlijent not found")
-
-    response_data = {
-        "sesijaklijent": db_sesijaklijent,
-}
-    return response_data
-
+    return {"sesijaklijent": db_sesijaklijent}
 
 
 @app.post("/sesijaklijent/", response_model=None, tags=["SesijaKlijent"])
 async def create_sesijaklijent(sesijaklijent_data: SesijaKlijentCreate, database: Session = Depends(get_db)) -> SesijaKlijent:
-
     if sesijaklijent_data.klijent is not None:
         db_klijent = database.query(Klijent).filter(Klijent.id == sesijaklijent_data.klijent).first()
         if not db_klijent:
@@ -975,44 +1016,40 @@ async def create_sesijaklijent(sesijaklijent_data: SesijaKlijentCreate, database
         raise HTTPException(status_code=400, detail="Sesija ID is required")
 
     db_sesijaklijent = SesijaKlijent(
-        id=sesijaklijent_data.id,        klijent_id=sesijaklijent_data.klijent,        sesija_id=sesijaklijent_data.sesija        )
+        id=sesijaklijent_data.id,
+        klijent_id=sesijaklijent_data.klijent,
+        sesija_id=sesijaklijent_data.sesija
+    )
 
     database.add(db_sesijaklijent)
     database.commit()
     database.refresh(db_sesijaklijent)
-
-
-
-
     return db_sesijaklijent
 
 
 @app.post("/sesijaklijent/bulk/", response_model=None, tags=["SesijaKlijent"])
 async def bulk_create_sesijaklijent(items: list[SesijaKlijentCreate], database: Session = Depends(get_db)) -> dict:
-    """Create multiple SesijaKlijent entities at once"""
     created_items = []
     errors = []
-
     for idx, item_data in enumerate(items):
         try:
-            # Basic validation for each item
             if not item_data.klijent:
                 raise ValueError("Klijent ID is required")
             if not item_data.sesija:
                 raise ValueError("Sesija ID is required")
-
             db_sesijaklijent = SesijaKlijent(
-                id=item_data.id,                klijent_id=item_data.klijent,                sesija_id=item_data.sesija            )
+                id=item_data.id,
+                klijent_id=item_data.klijent,
+                sesija_id=item_data.sesija
+            )
             database.add(db_sesijaklijent)
-            database.flush()  # Get ID without committing
+            database.flush()
             created_items.append(db_sesijaklijent.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
-
     if errors:
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
-
     database.commit()
     return {
         "created_count": len(created_items),
@@ -1023,10 +1060,8 @@ async def bulk_create_sesijaklijent(items: list[SesijaKlijentCreate], database: 
 
 @app.delete("/sesijaklijent/bulk/", response_model=None, tags=["SesijaKlijent"])
 async def bulk_delete_sesijaklijent(ids: list[int], database: Session = Depends(get_db)) -> dict:
-    """Delete multiple SesijaKlijent entities at once"""
     deleted_count = 0
     not_found = []
-
     for item_id in ids:
         db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == item_id).first()
         if db_sesijaklijent:
@@ -1034,9 +1069,7 @@ async def bulk_delete_sesijaklijent(ids: list[int], database: Session = Depends(
             deleted_count += 1
         else:
             not_found.append(item_id)
-
     database.commit()
-
     return {
         "deleted_count": deleted_count,
         "not_found": not_found,
@@ -1048,7 +1081,6 @@ async def update_sesijaklijent(sesijaklijent_id: int, sesijaklijent_data: Sesija
     db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
     if db_sesijaklijent is None:
         raise HTTPException(status_code=404, detail="SesijaKlijent not found")
-
     setattr(db_sesijaklijent, 'id', sesijaklijent_data.id)
     if sesijaklijent_data.klijent is not None:
         db_klijent = database.query(Klijent).filter(Klijent.id == sesijaklijent_data.klijent).first()
@@ -1062,7 +1094,6 @@ async def update_sesijaklijent(sesijaklijent_id: int, sesijaklijent_data: Sesija
         setattr(db_sesijaklijent, 'sesija_id', sesijaklijent_data.sesija)
     database.commit()
     database.refresh(db_sesijaklijent)
-
     return db_sesijaklijent
 
 
@@ -1076,6 +1107,135 @@ async def delete_sesijaklijent(sesijaklijent_id: int, database: Session = Depend
     return {"message": "Deleted", "id": sesijaklijent_id}
 
 
+############################################
+#
+#   GrupaKlijent functions (NEW - Group members)
+#
+############################################
+
+@app.get("/grupaklijent/", response_model=None, tags=["GrupaKlijent"])
+def get_all_grupaklijent(detailed: bool = False, database: Session = Depends(get_db)) -> list:
+    from sqlalchemy.orm import joinedload
+
+    if detailed:
+        query = database.query(GrupaKlijent)
+        query = query.options(joinedload(GrupaKlijent.grupa))
+        query = query.options(joinedload(GrupaKlijent.klijent))
+        gk_list = query.all()
+
+        result = []
+        for gk_item in gk_list:
+            item_dict = gk_item.__dict__.copy()
+            item_dict.pop('_sa_instance_state', None)
+
+            if gk_item.grupa:
+                related_dict = gk_item.grupa.__dict__.copy()
+                related_dict.pop('_sa_instance_state', None)
+                item_dict['grupa'] = related_dict
+            else:
+                item_dict['grupa'] = None
+
+            if gk_item.klijent:
+                related_dict = gk_item.klijent.__dict__.copy()
+                related_dict.pop('_sa_instance_state', None)
+                item_dict['klijent'] = related_dict
+            else:
+                item_dict['klijent'] = None
+
+            result.append(item_dict)
+        return result
+    else:
+        return database.query(GrupaKlijent).all()
+
+
+@app.get("/grupaklijent/by-grupa/{grupa_id}/", response_model=None, tags=["GrupaKlijent"])
+def get_grupaklijent_by_grupa(grupa_id: int, database: Session = Depends(get_db)) -> list:
+    """Get all members (klijenti) of a specific group"""
+    gk_list = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).all()
+    result = []
+    for gk in gk_list:
+        item = gk.__dict__.copy()
+        item.pop('_sa_instance_state', None)
+        klijent = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+        if klijent:
+            klijent_dict = klijent.__dict__.copy()
+            klijent_dict.pop('_sa_instance_state', None)
+            item['klijent'] = klijent_dict
+        result.append(item)
+    return result
+
+
+@app.post("/grupaklijent/", response_model=None, tags=["GrupaKlijent"])
+async def create_grupaklijent(data: GrupaKlijentCreate, database: Session = Depends(get_db)):
+    if data.grupa_id is None:
+        raise HTTPException(status_code=400, detail="Grupa ID is required")
+    if data.klijent_id is None:
+        raise HTTPException(status_code=400, detail="Klijent ID is required")
+
+    db_grupa = database.query(Grupa).filter(Grupa.id == data.grupa_id).first()
+    if not db_grupa:
+        raise HTTPException(status_code=400, detail="Grupa not found")
+
+    db_klijent = database.query(Klijent).filter(Klijent.id == data.klijent_id).first()
+    if not db_klijent:
+        raise HTTPException(status_code=400, detail="Klijent not found")
+
+    # Check if already exists
+    existing = database.query(GrupaKlijent).filter(
+        GrupaKlijent.grupa_id == data.grupa_id,
+        GrupaKlijent.klijent_id == data.klijent_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Klijent is already in this group")
+
+    db_gk = GrupaKlijent(
+        grupa_id=data.grupa_id,
+        klijent_id=data.klijent_id
+    )
+    database.add(db_gk)
+    database.commit()
+    database.refresh(db_gk)
+    return db_gk
+
+
+@app.delete("/grupaklijent/{grupaklijent_id}/", response_model=None, tags=["GrupaKlijent"])
+async def delete_grupaklijent(grupaklijent_id: int, database: Session = Depends(get_db)):
+    db_gk = database.query(GrupaKlijent).filter(GrupaKlijent.id == grupaklijent_id).first()
+    if db_gk is None:
+        raise HTTPException(status_code=404, detail="GrupaKlijent not found")
+    database.delete(db_gk)
+    database.commit()
+    return {"message": "Deleted", "id": grupaklijent_id}
+
+
+@app.put("/grupaklijent/sync/{grupa_id}/", response_model=None, tags=["GrupaKlijent"])
+async def sync_grupa_members(grupa_id: int, klijent_ids: list[int] = Body(...), database: Session = Depends(get_db)):
+    """Sync group members - replace all members with the given list of klijent IDs"""
+    db_grupa = database.query(Grupa).filter(Grupa.id == grupa_id).first()
+    if not db_grupa:
+        raise HTTPException(status_code=404, detail="Grupa not found")
+
+    # Delete all existing members
+    database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).delete()
+
+    # Add new members
+    for klijent_id in klijent_ids:
+        db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
+        if not db_klijent:
+            database.rollback()
+            raise HTTPException(status_code=400, detail=f"Klijent with id {klijent_id} not found")
+        db_gk = GrupaKlijent(grupa_id=grupa_id, klijent_id=klijent_id)
+        database.add(db_gk)
+
+    database.commit()
+
+    # Return updated list
+    members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).all()
+    return {
+        "grupa_id": grupa_id,
+        "member_count": len(members),
+        "klijent_ids": [m.klijent_id for m in members]
+    }
 
 
 ############################################
@@ -1088,21 +1248,15 @@ async def delete_sesijaklijent(sesijaklijent_id: int, database: Session = Depend
 def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
-    # Use detailed=true to get entities with eagerly loaded relationships (for tables with lookup columns)
     if detailed:
-        # Eagerly load all relationships to avoid N+1 queries
         query = database.query(Sesija)
         sesija_list = query.all()
 
-        # Serialize with relationships included
         result = []
         for sesija_item in sesija_list:
             item_dict = sesija_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
 
-            # Add many-to-one relationships (foreign keys for lookup columns)
-
-            # Add many-to-many and one-to-many relationship objects (full details)
             cena_list = database.query(Cena).filter(Cena.sesija_2_id == sesija_item.id).all()
             item_dict['cena'] = []
             for cena_obj in cena_list:
@@ -1130,7 +1284,8 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
         for s in sesija_list:
             item = s.__dict__.copy()
             item.pop('_sa_instance_state', None)
-            # Dodaj ime klijenta
+
+            # Dodaj ime klijenta ili naziv grupe
             sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == s.id).first()
             if sk and sk.klijent_id:
                 klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
@@ -1140,24 +1295,38 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
                     item['klijent_ime'] = ""
             else:
                 item['klijent_ime'] = ""
+
+            # Check if it's a group session
+            sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == s.id).first()
+            if sg and sg.grupa_id:
+                grupa = database.query(Grupa).filter(Grupa.id == sg.grupa_id).first()
+                if grupa:
+                    item['grupa_naziv'] = grupa.naziv
+                    item['grupa_id'] = grupa.id
+                    # If no individual client name, show group name
+                    if not item['klijent_ime']:
+                        item['klijent_ime'] = f"[Grupa] {grupa.naziv}"
+                else:
+                    item['grupa_naziv'] = ""
+                    item['grupa_id'] = None
+            else:
+                item['grupa_naziv'] = ""
+                item['grupa_id'] = None
+
             result.append(item)
         return result
 
 
 @app.get("/sesija/count/", response_model=None, tags=["Sesija"])
 def get_count_sesija(database: Session = Depends(get_db)) -> dict:
-    """Get the total count of Sesija entities"""
     count = database.query(Sesija).count()
     return {"count": count}
 
 
 @app.get("/sesija/paginated/", response_model=None, tags=["Sesija"])
 def get_paginated_sesija(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
-    """Get paginated list of Sesija entities"""
     total = database.query(Sesija).count()
     sesija_list = database.query(Sesija).offset(skip).limit(limit).all()
-    # By default, return flat entities (for charts/widgets)
-    # Use detailed=true to get entities with relationships
     if not detailed:
         return {
             "total": total,
@@ -1173,7 +1342,10 @@ def get_paginated_sesija(skip: int = 0, limit: int = 100, detailed: bool = False
         sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == sesija_item.id).all()
         item_data = {
             "sesija": sesija_item,
-            "cena_ids": [x[0] for x in cena_ids],            "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],            "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]        }
+            "cena_ids": [x[0] for x in cena_ids],
+            "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
+            "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
+        }
         result.append(item_data)
     return {
         "total": total,
@@ -1184,13 +1356,8 @@ def get_paginated_sesija(skip: int = 0, limit: int = 100, detailed: bool = False
 
 
 @app.get("/sesija/search/", response_model=None, tags=["Sesija"])
-def search_sesija(
-    database: Session = Depends(get_db)
-) -> list:
-    """Search Sesija entities by attributes"""
+def search_sesija(database: Session = Depends(get_db)) -> list:
     query = database.query(Sesija)
-
-
     results = query.all()
     return results
 
@@ -1206,7 +1373,10 @@ async def get_sesija(sesija_id: int, database: Session = Depends(get_db)) -> Ses
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
     response_data = {
         "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids],        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
+        "cena_ids": [x[0] for x in cena_ids],
+        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
+        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
+    }
     return response_data
 
 
@@ -1219,8 +1389,6 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
     database.add(db_sesija)
     database.commit()
     database.refresh(db_sesija)
-
-    # NEMOJ slati email ovde — prvo povezi klijenta
 
     if sesija_data.uplate:
         for cena_id in sesija_data.uplate:
@@ -1252,16 +1420,66 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
         )
         database.commit()
 
-        # Dohvati klijenta iz payload-a ILI iz SesijaKlijent veze
+    # Handle individual client session
     client_name = "Klijent"
     client_email = None
+    is_group_session = False
 
     if sesija_data.klijent_id:
+        # Individual session - create SesijaKlijent link automatically
         klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
         if klijent:
             client_name = f"{klijent.ime} {klijent.prezime}"
             client_email = klijent.email
+
+            # Auto-create SesijaKlijent link
+            existing_sk = database.query(SesijaKlijent).filter(
+                SesijaKlijent.sesija_id == db_sesija.id,
+                SesijaKlijent.klijent_id == klijent.id
+            ).first()
+            if not existing_sk:
+                new_sk = SesijaKlijent(klijent_id=klijent.id, sesija_id=db_sesija.id)
+                database.add(new_sk)
+                database.commit()
+    elif sesija_data.grupa_id:
+        # Group session - create SesijaGrupa link automatically
+        is_group_session = True
+        grupa = database.query(Grupa).filter(Grupa.id == sesija_data.grupa_id).first()
+        if grupa:
+            # Auto-create SesijaGrupa link
+            existing_sg = database.query(SesijaGrupa).filter(
+                SesijaGrupa.sesija_1_id == db_sesija.id,
+                SesijaGrupa.grupa_id == grupa.id
+            ).first()
+            if not existing_sg:
+                new_sg = SesijaGrupa(grupa_id=grupa.id, sesija_1_id=db_sesija.id)
+                database.add(new_sg)
+                database.commit()
+
+            # Get all group members for email
+            group_members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa.id).all()
+            member_emails = []
+            for gk in group_members:
+                member = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+                if member:
+                    member_emails.append({
+                        "name": f"{member.ime} {member.prezime}",
+                        "email": member.email
+                    })
+
+            try:
+                send_session_email_to_group(
+                    action="created",
+                    grupa_naziv=grupa.naziv,
+                    pocetak=db_sesija.pocetak,
+                    kraj=db_sesija.kraj,
+                    cena=db_sesija.cena,
+                    client_emails=member_emails
+                )
+            except Exception as e:
+                logger.error(f"Failed to send group email: {e}")
     else:
+        # Fallback: check SesijaKlijent
         sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
         if sk and sk.klijent_id:
             klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
@@ -1269,17 +1487,19 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
                 client_name = f"{klijent.ime} {klijent.prezime}"
                 client_email = klijent.email
 
-    try:
-        send_session_email(
-            action="created",
-            client_name=client_name,
-            pocetak=db_sesija.pocetak,
-            kraj=db_sesija.kraj,
-            cena=db_sesija.cena,
-            client_email=client_email  # Uvek na tvoj email
-        )
-    except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+    # Send individual email (not for group sessions - those are handled above)
+    if not is_group_session:
+        try:
+            send_session_email(
+                action="created",
+                client_name=client_name,
+                pocetak=db_sesija.pocetak,
+                kraj=db_sesija.kraj,
+                cena=db_sesija.cena,
+                client_email=client_email
+            )
+        except Exception as e:
+            logger.error(f"Failed to send email: {e}")
 
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
@@ -1295,26 +1515,25 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
 
 @app.post("/sesija/bulk/", response_model=None, tags=["Sesija"])
 async def bulk_create_sesija(items: list[SesijaCreate], database: Session = Depends(get_db)) -> dict:
-    """Create multiple Sesija entities at once"""
     created_items = []
     errors = []
-
     for idx, item_data in enumerate(items):
         try:
-            # Basic validation for each item
-
             db_sesija = Sesija(
-                cena=item_data.cena_vrednost,               status=item_data.status,                id=item_data.id,                pocetak=item_data.pocetak,                kraj=item_data.kraj            )
+                cena=item_data.cena,
+                status=item_data.status,
+                id=item_data.id,
+                pocetak=item_data.pocetak,
+                kraj=item_data.kraj
+            )
             database.add(db_sesija)
-            database.flush()  # Get ID without committing
+            database.flush()
             created_items.append(db_sesija.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
-
     if errors:
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
-
     database.commit()
     return {
         "created_count": len(created_items),
@@ -1325,10 +1544,8 @@ async def bulk_create_sesija(items: list[SesijaCreate], database: Session = Depe
 
 @app.delete("/sesija/bulk/", response_model=None, tags=["Sesija"])
 async def bulk_delete_sesija(ids: list[int], database: Session = Depends(get_db)) -> dict:
-    """Delete multiple Sesija entities at once"""
     deleted_count = 0
     not_found = []
-
     for item_id in ids:
         db_sesija = database.query(Sesija).filter(Sesija.id == item_id).first()
         if db_sesija:
@@ -1336,9 +1553,7 @@ async def bulk_delete_sesija(ids: list[int], database: Session = Depends(get_db)
             deleted_count += 1
         else:
             not_found.append(item_id)
-
     database.commit()
-
     return {
         "deleted_count": deleted_count,
         "not_found": not_found,
@@ -1357,77 +1572,103 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
     setattr(db_sesija, 'id', sesija_data.id)
     setattr(db_sesija, 'pocetak', sesija_data.pocetak)
     setattr(db_sesija, 'kraj', sesija_data.kraj)
+
     if sesija_data.uplate is not None:
-        # Clear all existing relationships (set foreign key to NULL)
         database.query(Cena).filter(Cena.sesija_2_id == db_sesija.id).update(
             {Cena.sesija_2_id: None}, synchronize_session=False
         )
-
-        # Set new relationships if list is not empty
         if sesija_data.uplate:
-            # Validate that all IDs exist
             for cena_id in sesija_data.uplate:
                 db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
                 if not db_cena:
                     raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-
-            # Update the related entities with the new foreign key
             database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update(
                 {Cena.sesija_2_id: db_sesija.id}, synchronize_session=False
             )
+
     if sesija_data.sesijaklijent_1 is not None:
-        # Clear all existing relationships (set foreign key to NULL)
         database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).update(
             {SesijaKlijent.sesija_id: None}, synchronize_session=False
         )
-
-        # Set new relationships if list is not empty
         if sesija_data.sesijaklijent_1:
-            # Validate that all IDs exist
             for sesijaklijent_id in sesija_data.sesijaklijent_1:
                 db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
                 if not db_sesijaklijent:
                     raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-
-            # Update the related entities with the new foreign key
             database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(sesija_data.sesijaklijent_1)).update(
                 {SesijaKlijent.sesija_id: db_sesija.id}, synchronize_session=False
             )
+
     if sesija_data.sesijagrupa_1 is not None:
-        # Clear all existing relationships (set foreign key to NULL)
         database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).update(
             {SesijaGrupa.sesija_1_id: None}, synchronize_session=False
         )
-
-        # Set new relationships if list is not empty
         if sesija_data.sesijagrupa_1:
-            # Validate that all IDs exist
             for sesijagrupa_id in sesija_data.sesijagrupa_1:
                 db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
                 if not db_sesijagrupa:
                     raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-
-            # Update the related entities with the new foreign key
             database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(sesija_data.sesijagrupa_1)).update(
                 {SesijaGrupa.sesija_1_id: db_sesija.id}, synchronize_session=False
             )
+
+    # Handle klijent_id or grupa_id update for linking
+    is_group_session = False
+
+    if sesija_data.klijent_id:
+        # Clear any existing group link
+        database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).delete()
+        # Clear existing client links
+        database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).delete()
+
+        klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
+        if klijent:
+            new_sk = SesijaKlijent(klijent_id=klijent.id, sesija_id=db_sesija.id)
+            database.add(new_sk)
+
+    elif sesija_data.grupa_id:
+        is_group_session = True
+        # Clear existing client links
+        database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).delete()
+        # Clear existing group links
+        database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).delete()
+
+        grupa = database.query(Grupa).filter(Grupa.id == sesija_data.grupa_id).first()
+        if grupa:
+            new_sg = SesijaGrupa(grupa_id=grupa.id, sesija_1_id=db_sesija.id)
+            database.add(new_sg)
+
     database.commit()
     database.refresh(db_sesija)
 
+    # Send email
     client_name = "Klijent"
-    if sesija_data.klijent_id:
-        klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
-        if klijent:
-            client_name = f"{klijent.ime} {klijent.prezime}"
-    else:
-        sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
-        if sk and sk.klijent_id:
-            klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
-            if klijent:
-                client_name = f"{klijent.ime} {klijent.prezime}"
+    client_email = None
 
-        client_name = "Klijent"
-        client_email = None
+    if is_group_session and sesija_data.grupa_id:
+        grupa = database.query(Grupa).filter(Grupa.id == sesija_data.grupa_id).first()
+        if grupa:
+            group_members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa.id).all()
+            member_emails = []
+            for gk in group_members:
+                member = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+                if member:
+                    member_emails.append({
+                        "name": f"{member.ime} {member.prezime}",
+                        "email": member.email
+                    })
+            try:
+                send_session_email_to_group(
+                    action="updated",
+                    grupa_naziv=grupa.naziv,
+                    pocetak=db_sesija.pocetak,
+                    kraj=db_sesija.kraj,
+                    cena=db_sesija.cena,
+                    client_emails=member_emails
+                )
+            except Exception as e:
+                logger.error(f"Failed to send group email: {e}")
+    else:
         if sesija_data.klijent_id:
             klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
             if klijent:
@@ -1474,12 +1715,47 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
     kraj = db_sesija.kraj
     cena = db_sesija.cena
 
+    # Check if group session
+    sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).first()
+    if sg and sg.grupa_id:
+        grupa = database.query(Grupa).filter(Grupa.id == sg.grupa_id).first()
+        if grupa:
+            group_members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa.id).all()
+            member_emails = []
+            for gk in group_members:
+                member = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+                if member:
+                    member_emails.append({
+                        "name": f"{member.ime} {member.prezime}",
+                        "email": member.email
+                    })
+
+            database.delete(db_sesija)
+            database.commit()
+
+            try:
+                send_session_email_to_group(
+                    action="deleted",
+                    grupa_naziv=grupa.naziv,
+                    pocetak=pocetak,
+                    kraj=kraj,
+                    cena=cena,
+                    client_emails=member_emails
+                )
+            except Exception as e:
+                logger.error(f"Failed to send group email: {e}")
+
+            return {"message": "Deleted", "id": sesija_id}
+
+    # Individual session
     client_name = "Klijent"
+    client_email = None
     sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
     if sk and sk.klijent_id:
         klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
         if klijent:
             client_name = f"{klijent.ime} {klijent.prezime}"
+            client_email = klijent.email
 
     database.delete(db_sesija)
     database.commit()
@@ -1491,15 +1767,12 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
             pocetak=pocetak,
             kraj=kraj,
             cena=cena,
-            client_email="igorpavlov106@gmail.com"
+            client_email=client_email
         )
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
 
     return {"message": "Deleted", "id": sesija_id}
-
-
-
 
 
 ############################################
@@ -1512,21 +1785,15 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
 def get_all_grupa(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
-    # Use detailed=true to get entities with eagerly loaded relationships (for tables with lookup columns)
     if detailed:
-        # Eagerly load all relationships to avoid N+1 queries
         query = database.query(Grupa)
         grupa_list = query.all()
 
-        # Serialize with relationships included
         result = []
         for grupa_item in grupa_list:
             item_dict = grupa_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
 
-            # Add many-to-one relationships (foreign keys for lookup columns)
-
-            # Add many-to-many and one-to-many relationship objects (full details)
             sesijagrupa_list = database.query(SesijaGrupa).filter(SesijaGrupa.grupa_id == grupa_item.id).all()
             item_dict['sesijagrupa'] = []
             for sesijagrupa_obj in sesijagrupa_list:
@@ -1534,27 +1801,51 @@ def get_all_grupa(detailed: bool = False, database: Session = Depends(get_db)) -
                 sesijagrupa_dict.pop('_sa_instance_state', None)
                 item_dict['sesijagrupa'].append(sesijagrupa_dict)
 
+            # Add group members
+            gk_list = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_item.id).all()
+            item_dict['clanovi'] = []
+            for gk in gk_list:
+                klijent = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+                if klijent:
+                    klijent_dict = klijent.__dict__.copy()
+                    klijent_dict.pop('_sa_instance_state', None)
+                    item_dict['clanovi'].append(klijent_dict)
+
             result.append(item_dict)
         return result
     else:
-        # Default: return flat entities (faster for charts/widgets without lookup columns)
-        return database.query(Grupa).all()
+        # Add member count for list display
+        grupa_list = database.query(Grupa).all()
+        result = []
+        for g in grupa_list:
+            item = g.__dict__.copy()
+            item.pop('_sa_instance_state', None)
+            member_count = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == g.id).count()
+            item['broj_clanova'] = member_count
+
+            # Get member names for display
+            gk_list = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == g.id).all()
+            member_names = []
+            for gk in gk_list:
+                klijent = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+                if klijent:
+                    member_names.append(f"{klijent.ime} {klijent.prezime}")
+            item['clanovi_imena'] = ", ".join(member_names) if member_names else "—"
+
+            result.append(item)
+        return result
 
 
 @app.get("/grupa/count/", response_model=None, tags=["Grupa"])
 def get_count_grupa(database: Session = Depends(get_db)) -> dict:
-    """Get the total count of Grupa entities"""
     count = database.query(Grupa).count()
     return {"count": count}
 
 
 @app.get("/grupa/paginated/", response_model=None, tags=["Grupa"])
 def get_paginated_grupa(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
-    """Get paginated list of Grupa entities"""
     total = database.query(Grupa).count()
     grupa_list = database.query(Grupa).offset(skip).limit(limit).all()
-    # By default, return flat entities (for charts/widgets)
-    # Use detailed=true to get entities with relationships
     if not detailed:
         return {
             "total": total,
@@ -1568,7 +1859,8 @@ def get_paginated_grupa(skip: int = 0, limit: int = 100, detailed: bool = False,
         sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == grupa_item.id).all()
         item_data = {
             "grupa": grupa_item,
-            "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]        }
+            "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]
+        }
         result.append(item_data)
     return {
         "total": total,
@@ -1579,13 +1871,8 @@ def get_paginated_grupa(skip: int = 0, limit: int = 100, detailed: bool = False,
 
 
 @app.get("/grupa/search/", response_model=None, tags=["Grupa"])
-def search_grupa(
-    database: Session = Depends(get_db)
-) -> list:
-    """Search Grupa entities by attributes"""
+def search_grupa(database: Session = Depends(get_db)) -> list:
     query = database.query(Grupa)
-
-
     results = query.all()
     return results
 
@@ -1597,68 +1884,81 @@ async def get_grupa(grupa_id: int, database: Session = Depends(get_db)) -> Grupa
         raise HTTPException(status_code=404, detail="Grupa not found")
 
     sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == db_grupa.id).all()
+
+    # Get member IDs
+    member_ids = database.query(GrupaKlijent.klijent_id).filter(GrupaKlijent.grupa_id == db_grupa.id).all()
+
     response_data = {
         "grupa": db_grupa,
-        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]}
+        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids],
+        "member_ids": [x[0] for x in member_ids]
+    }
     return response_data
-
 
 
 @app.post("/grupa/", response_model=None, tags=["Grupa"])
 async def create_grupa(grupa_data: GrupaCreate, database: Session = Depends(get_db)) -> Grupa:
-
-
     db_grupa = Grupa(
-        opis=grupa_data.opis,        id=grupa_data.id,        cena=grupa_data.cena,        naziv=grupa_data.naziv        )
+        opis=grupa_data.opis,
+        id=grupa_data.id,
+        cena=grupa_data.cena,
+        naziv=grupa_data.naziv
+    )
 
     database.add(db_grupa)
     database.commit()
     database.refresh(db_grupa)
 
     if grupa_data.sesijagrupa:
-        # Validate that all SesijaGrupa IDs exist
         for sesijagrupa_id in grupa_data.sesijagrupa:
             db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
             if not db_sesijagrupa:
                 raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-
-        # Update the related entities with the new foreign key
         database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(grupa_data.sesijagrupa)).update(
             {SesijaGrupa.grupa_id: db_grupa.id}, synchronize_session=False
         )
         database.commit()
 
-
+    # Add group members if provided
+    if grupa_data.clanovi:
+        for klijent_id in grupa_data.clanovi:
+            db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
+            if not db_klijent:
+                raise HTTPException(status_code=400, detail=f"Klijent with id {klijent_id} not found")
+            db_gk = GrupaKlijent(grupa_id=db_grupa.id, klijent_id=klijent_id)
+            database.add(db_gk)
+        database.commit()
 
     sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == db_grupa.id).all()
+    member_ids = database.query(GrupaKlijent.klijent_id).filter(GrupaKlijent.grupa_id == db_grupa.id).all()
     response_data = {
         "grupa": db_grupa,
-        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]    }
+        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids],
+        "member_ids": [x[0] for x in member_ids]
+    }
     return response_data
 
 
 @app.post("/grupa/bulk/", response_model=None, tags=["Grupa"])
 async def bulk_create_grupa(items: list[GrupaCreate], database: Session = Depends(get_db)) -> dict:
-    """Create multiple Grupa entities at once"""
     created_items = []
     errors = []
-
     for idx, item_data in enumerate(items):
         try:
-            # Basic validation for each item
-
             db_grupa = Grupa(
-                opis=item_data.opis,                id=item_data.id,                cena=item_data.cena,                naziv=item_data.naziv            )
+                opis=item_data.opis,
+                id=item_data.id,
+                cena=item_data.cena,
+                naziv=item_data.naziv
+            )
             database.add(db_grupa)
-            database.flush()  # Get ID without committing
+            database.flush()
             created_items.append(db_grupa.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
-
     if errors:
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
-
     database.commit()
     return {
         "created_count": len(created_items),
@@ -1669,10 +1969,8 @@ async def bulk_create_grupa(items: list[GrupaCreate], database: Session = Depend
 
 @app.delete("/grupa/bulk/", response_model=None, tags=["Grupa"])
 async def bulk_delete_grupa(ids: list[int], database: Session = Depends(get_db)) -> dict:
-    """Delete multiple Grupa entities at once"""
     deleted_count = 0
     not_found = []
-
     for item_id in ids:
         db_grupa = database.query(Grupa).filter(Grupa.id == item_id).first()
         if db_grupa:
@@ -1680,9 +1978,7 @@ async def bulk_delete_grupa(ids: list[int], database: Session = Depends(get_db))
             deleted_count += 1
         else:
             not_found.append(item_id)
-
     database.commit()
-
     return {
         "deleted_count": deleted_count,
         "not_found": not_found,
@@ -1699,31 +1995,40 @@ async def update_grupa(grupa_id: int, grupa_data: GrupaCreate, database: Session
     setattr(db_grupa, 'id', grupa_data.id)
     setattr(db_grupa, 'cena', grupa_data.cena)
     setattr(db_grupa, 'naziv', grupa_data.naziv)
+
     if grupa_data.sesijagrupa is not None:
-        # Clear all existing relationships (set foreign key to NULL)
         database.query(SesijaGrupa).filter(SesijaGrupa.grupa_id == db_grupa.id).update(
             {SesijaGrupa.grupa_id: None}, synchronize_session=False
         )
-
-        # Set new relationships if list is not empty
         if grupa_data.sesijagrupa:
-            # Validate that all IDs exist
             for sesijagrupa_id in grupa_data.sesijagrupa:
                 db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
                 if not db_sesijagrupa:
                     raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-
-            # Update the related entities with the new foreign key
             database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(grupa_data.sesijagrupa)).update(
                 {SesijaGrupa.grupa_id: db_grupa.id}, synchronize_session=False
             )
+
+    # Sync group members
+    if grupa_data.clanovi is not None:
+        database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == db_grupa.id).delete()
+        for klijent_id in grupa_data.clanovi:
+            db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
+            if not db_klijent:
+                raise HTTPException(status_code=400, detail=f"Klijent with id {klijent_id} not found")
+            db_gk = GrupaKlijent(grupa_id=db_grupa.id, klijent_id=klijent_id)
+            database.add(db_gk)
+
     database.commit()
     database.refresh(db_grupa)
 
     sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == db_grupa.id).all()
+    member_ids = database.query(GrupaKlijent.klijent_id).filter(GrupaKlijent.grupa_id == db_grupa.id).all()
     response_data = {
         "grupa": db_grupa,
-        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]    }
+        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids],
+        "member_ids": [x[0] for x in member_ids]
+    }
     return response_data
 
 
@@ -1732,12 +2037,11 @@ async def delete_grupa(grupa_id: int, database: Session = Depends(get_db)):
     db_grupa = database.query(Grupa).filter(Grupa.id == grupa_id).first()
     if db_grupa is None:
         raise HTTPException(status_code=404, detail="Grupa not found")
+    # Delete group members first
+    database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).delete()
     database.delete(db_grupa)
     database.commit()
     return {"message": "Deleted", "id": grupa_id}
-
-
-
 
 
 ############################################
@@ -1750,21 +2054,15 @@ async def delete_grupa(grupa_id: int, database: Session = Depends(get_db)):
 def get_all_klijent(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
-    # Use detailed=true to get entities with eagerly loaded relationships (for tables with lookup columns)
     if detailed:
-        # Eagerly load all relationships to avoid N+1 queries
         query = database.query(Klijent)
         klijent_list = query.all()
 
-        # Serialize with relationships included
         result = []
         for klijent_item in klijent_list:
             item_dict = klijent_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
 
-            # Add many-to-one relationships (foreign keys for lookup columns)
-
-            # Add many-to-many and one-to-many relationship objects (full details)
             sesijaklijent_list = database.query(SesijaKlijent).filter(SesijaKlijent.klijent_id == klijent_item.id).all()
             item_dict['sesijaklijent'] = []
             for sesijaklijent_obj in sesijaklijent_list:
@@ -1781,24 +2079,19 @@ def get_all_klijent(detailed: bool = False, database: Session = Depends(get_db))
             result.append(item_dict)
         return result
     else:
-        # Default: return flat entities (faster for charts/widgets without lookup columns)
         return database.query(Klijent).all()
 
 
 @app.get("/klijent/count/", response_model=None, tags=["Klijent"])
 def get_count_klijent(database: Session = Depends(get_db)) -> dict:
-    """Get the total count of Klijent entities"""
     count = database.query(Klijent).count()
     return {"count": count}
 
 
 @app.get("/klijent/paginated/", response_model=None, tags=["Klijent"])
 def get_paginated_klijent(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
-    """Get paginated list of Klijent entities"""
     total = database.query(Klijent).count()
     klijent_list = database.query(Klijent).offset(skip).limit(limit).all()
-    # By default, return flat entities (for charts/widgets)
-    # Use detailed=true to get entities with relationships
     if not detailed:
         return {
             "total": total,
@@ -1813,7 +2106,9 @@ def get_paginated_klijent(skip: int = 0, limit: int = 100, detailed: bool = Fals
         cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == klijent_item.id).all()
         item_data = {
             "klijent": klijent_item,
-            "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],            "cena_1_ids": [x[0] for x in cena_1_ids]        }
+            "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
+            "cena_1_ids": [x[0] for x in cena_1_ids]
+        }
         result.append(item_data)
     return {
         "total": total,
@@ -1824,13 +2119,8 @@ def get_paginated_klijent(skip: int = 0, limit: int = 100, detailed: bool = Fals
 
 
 @app.get("/klijent/search/", response_model=None, tags=["Klijent"])
-def search_klijent(
-    database: Session = Depends(get_db)
-) -> list:
-    """Search Klijent entities by attributes"""
+def search_klijent(database: Session = Depends(get_db)) -> list:
     query = database.query(Klijent)
-
-
     results = query.all()
     return results
 
@@ -1845,79 +2135,76 @@ async def get_klijent(klijent_id: int, database: Session = Depends(get_db)) -> K
     cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == db_klijent.id).all()
     response_data = {
         "klijent": db_klijent,
-        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],        "cena_1_ids": [x[0] for x in cena_1_ids]}
+        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
+        "cena_1_ids": [x[0] for x in cena_1_ids]
+    }
     return response_data
-
 
 
 @app.post("/klijent/", response_model=None, tags=["Klijent"])
 async def create_klijent(klijent_data: KlijentCreate, database: Session = Depends(get_db)) -> Klijent:
-
-
     db_klijent = Klijent(
-        ime=klijent_data.ime,        email=klijent_data.email,        id=klijent_data.id,        prezime=klijent_data.prezime,        broj_telefona=klijent_data.broj_telefona        )
+        ime=klijent_data.ime,
+        email=klijent_data.email,
+        id=klijent_data.id,
+        prezime=klijent_data.prezime,
+        broj_telefona=klijent_data.broj_telefona
+    )
 
     database.add(db_klijent)
     database.commit()
     database.refresh(db_klijent)
 
     if klijent_data.sesijaklijent:
-        # Validate that all SesijaKlijent IDs exist
         for sesijaklijent_id in klijent_data.sesijaklijent:
             db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
             if not db_sesijaklijent:
                 raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-
-        # Update the related entities with the new foreign key
         database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(klijent_data.sesijaklijent)).update(
             {SesijaKlijent.klijent_id: db_klijent.id}, synchronize_session=False
         )
         database.commit()
     if klijent_data.cena_1:
-        # Validate that all Cena IDs exist
         for cena_id in klijent_data.cena_1:
             db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
             if not db_cena:
                 raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-
-        # Update the related entities with the new foreign key
         database.query(Cena).filter(Cena.id.in_(klijent_data.cena_1)).update(
             {Cena.klijent_1_id: db_klijent.id}, synchronize_session=False
         )
         database.commit()
 
-
-
     sesijaklijent_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.klijent_id == db_klijent.id).all()
     cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == db_klijent.id).all()
     response_data = {
         "klijent": db_klijent,
-        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],        "cena_1_ids": [x[0] for x in cena_1_ids]    }
+        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
+        "cena_1_ids": [x[0] for x in cena_1_ids]
+    }
     return response_data
 
 
 @app.post("/klijent/bulk/", response_model=None, tags=["Klijent"])
 async def bulk_create_klijent(items: list[KlijentCreate], database: Session = Depends(get_db)) -> dict:
-    """Create multiple Klijent entities at once"""
     created_items = []
     errors = []
-
     for idx, item_data in enumerate(items):
         try:
-            # Basic validation for each item
-
             db_klijent = Klijent(
-                ime=item_data.ime,                email=item_data.email,                id=item_data.id,                prezime=item_data.prezime,                broj_telefona=item_data.broj_telefona            )
+                ime=item_data.ime,
+                email=item_data.email,
+                id=item_data.id,
+                prezime=item_data.prezime,
+                broj_telefona=item_data.broj_telefona
+            )
             database.add(db_klijent)
-            database.flush()  # Get ID without committing
+            database.flush()
             created_items.append(db_klijent.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
-
     if errors:
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
-
     database.commit()
     return {
         "created_count": len(created_items),
@@ -1928,10 +2215,8 @@ async def bulk_create_klijent(items: list[KlijentCreate], database: Session = De
 
 @app.delete("/klijent/bulk/", response_model=None, tags=["Klijent"])
 async def bulk_delete_klijent(ids: list[int], database: Session = Depends(get_db)) -> dict:
-    """Delete multiple Klijent entities at once"""
     deleted_count = 0
     not_found = []
-
     for item_id in ids:
         db_klijent = database.query(Klijent).filter(Klijent.id == item_id).first()
         if db_klijent:
@@ -1939,9 +2224,7 @@ async def bulk_delete_klijent(ids: list[int], database: Session = Depends(get_db
             deleted_count += 1
         else:
             not_found.append(item_id)
-
     database.commit()
-
     return {
         "deleted_count": deleted_count,
         "not_found": not_found,
@@ -1959,39 +2242,28 @@ async def update_klijent(klijent_id: int, klijent_data: KlijentCreate, database:
     setattr(db_klijent, 'id', klijent_data.id)
     setattr(db_klijent, 'prezime', klijent_data.prezime)
     setattr(db_klijent, 'broj_telefona', klijent_data.broj_telefona)
+
     if klijent_data.sesijaklijent is not None:
-        # Clear all existing relationships (set foreign key to NULL)
         database.query(SesijaKlijent).filter(SesijaKlijent.klijent_id == db_klijent.id).update(
             {SesijaKlijent.klijent_id: None}, synchronize_session=False
         )
-
-        # Set new relationships if list is not empty
         if klijent_data.sesijaklijent:
-            # Validate that all IDs exist
             for sesijaklijent_id in klijent_data.sesijaklijent:
                 db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
                 if not db_sesijaklijent:
                     raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-
-            # Update the related entities with the new foreign key
             database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(klijent_data.sesijaklijent)).update(
                 {SesijaKlijent.klijent_id: db_klijent.id}, synchronize_session=False
             )
     if klijent_data.cena_1 is not None:
-        # Clear all existing relationships (set foreign key to NULL)
         database.query(Cena).filter(Cena.klijent_1_id == db_klijent.id).update(
             {Cena.klijent_1_id: None}, synchronize_session=False
         )
-
-        # Set new relationships if list is not empty
         if klijent_data.cena_1:
-            # Validate that all IDs exist
             for cena_id in klijent_data.cena_1:
                 db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
                 if not db_cena:
                     raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-
-            # Update the related entities with the new foreign key
             database.query(Cena).filter(Cena.id.in_(klijent_data.cena_1)).update(
                 {Cena.klijent_1_id: db_klijent.id}, synchronize_session=False
             )
@@ -2002,7 +2274,9 @@ async def update_klijent(klijent_id: int, klijent_data: KlijentCreate, database:
     cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == db_klijent.id).all()
     response_data = {
         "klijent": db_klijent,
-        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],        "cena_1_ids": [x[0] for x in cena_1_ids]    }
+        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
+        "cena_1_ids": [x[0] for x in cena_1_ids]
+    }
     return response_data
 
 
@@ -2011,14 +2285,11 @@ async def delete_klijent(klijent_id: int, database: Session = Depends(get_db)):
     db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
     if db_klijent is None:
         raise HTTPException(status_code=404, detail="Klijent not found")
+    # Clean up group memberships
+    database.query(GrupaKlijent).filter(GrupaKlijent.klijent_id == klijent_id).delete()
     database.delete(db_klijent)
     database.commit()
     return {"message": "Deleted", "id": klijent_id}
-
-
-
-
-
 
 
 ############################################
@@ -2027,6 +2298,3 @@ async def delete_klijent(klijent_id: int, database: Session = Depends(get_db)):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
