@@ -159,7 +159,7 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
 
     # Email za psihologa (tvoj)
     resend.Emails.send({
-        "from": "PsihApp <onboarding@resend.dev>",
+        "from": "HrIo <noreply@hrioapp.com>",
         "to": ["igorpavlov106@gmail.com"],
         "subject": f"{c['icon']} {c['title']} - {client_name}",
         "html": html
@@ -204,7 +204,7 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
     </div>
     """
         resend.Emails.send({
-            "from": "PsihApp <onboarding@resend.dev>",
+            "from": "HrIo <noreply@hrioapp.com>",
             "to": [client_email],
             "subject": f"✅ Potvrda sesije - {format_date_long(pocetak)}",
             "html": client_html
