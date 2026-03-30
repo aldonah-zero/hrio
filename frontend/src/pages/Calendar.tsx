@@ -88,7 +88,7 @@ const Calendar: React.FC = () => {
     type: "success" | "error";
   } | null>(null);
   const [saving, setSaving] = useState(false);
-
+  const [sessionGroups, setSessionGroups] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     pocetak: "",
     kraj: "",
@@ -126,7 +126,14 @@ const Calendar: React.FC = () => {
       console.error("Error fetching clients:", err);
     }
   };
-
+const fetchSessionGroups = async () => {
+  try {
+    const res = await axios.get(`${backendBase}/sesijagrupa/`);
+    setSessionGroups(Array.isArray(res.data) ? res.data : []);
+  } catch (err) {
+    console.error("Error fetching session-group links:", err);
+  }
+};
 const fetchGroups = async () => {
   try {
     const res = await axios.get(`${backendBase}/grupa/`);
@@ -148,6 +155,7 @@ const fetchGroups = async () => {
       fetchSessions();
       fetchClients();
       fetchGroups();
+      fetchSessionGroups();
       fetchLinks();
     }, []);
 
@@ -171,6 +179,24 @@ const fetchGroups = async () => {
     });
     return map;
   }, [links, clients]);
+
+const sessionGroupMap = useMemo(() => {
+  const map: Record<number, string> = {};
+  const groupMap: Record<number, Group> = {};
+
+  groups.forEach((g) => {
+    groupMap[g.id] = g;
+  });
+
+  sessionGroups.forEach((link) => {
+    const group = groupMap[link.grupa_id];
+    if (group) {
+      map[link.sesija_id] = `Grupa: ${group.naziv}`;
+    }
+  });
+
+  return map;
+}, [sessionGroups, groups]);
 
   const weekStart = useMemo(() => getMonday(currentDate), [currentDate]);
   const weekDays = useMemo(
@@ -468,7 +494,8 @@ const fetchGroups = async () => {
                             >
                               <div className="cal-session-content">
                                 <span className="cal-session-name">
-                                  {sessionClientMap[s.id] || ""}
+                                  sessionClientMap[s.id] ||
+                                  sessionGroupMap[s.id] || ""{" "}
                                 </span>
                                 <span className="cal-session-time">
                                   {formatTime(start)} - {formatTime(end)}
