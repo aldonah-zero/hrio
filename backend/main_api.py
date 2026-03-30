@@ -166,7 +166,7 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
     })
 
     # Email za klijenta (samo ako ima email i ako je zakazivanje)
-    if client_email and client_email != "igorpavlov106@gmail.com" and action == "created":
+    if client_email and action == "created":
         client_html = f"""
     <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
     <div style="max-width:520px;margin:auto;">
@@ -1426,17 +1426,32 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
             if klijent:
                 client_name = f"{klijent.ime} {klijent.prezime}"
 
-    try:
-        send_session_email(
-            action="updated",
-            client_name=client_name,
-            pocetak=db_sesija.pocetak,
-            kraj=db_sesija.kraj,
-            cena=db_sesija.cena,
-            client_email="igorpavlov106@gmail.com"
-        )
-    except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        client_name = "Klijent"
+        client_email = None
+        if sesija_data.klijent_id:
+            klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
+            if klijent:
+                client_name = f"{klijent.ime} {klijent.prezime}"
+                client_email = klijent.email
+        else:
+            sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
+            if sk and sk.klijent_id:
+                klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+                if klijent:
+                    client_name = f"{klijent.ime} {klijent.prezime}"
+                    client_email = klijent.email
+
+        try:
+            send_session_email(
+                action="updated",
+                client_name=client_name,
+                pocetak=db_sesija.pocetak,
+                kraj=db_sesija.kraj,
+                cena=db_sesija.cena,
+                client_email=client_email
+            )
+        except Exception as e:
+            logger.error(f"Failed to send email: {e}")
 
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
