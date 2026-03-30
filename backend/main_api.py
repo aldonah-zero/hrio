@@ -1912,8 +1912,7 @@ async def create_grupa(grupa_data: GrupaCreate, database: Session = Depends(get_
         cena=grupa_data.cena,
         naziv=grupa_data.naziv
     )
-    if grupa_data.id is not None:
-        grupa_kwargs["id"] = grupa_data.id
+
     db_grupa = Grupa(**grupa_kwargs)
 
     database.add(db_grupa)
@@ -2003,7 +2002,6 @@ async def update_grupa(grupa_id: int, grupa_data: GrupaCreate, database: Session
         raise HTTPException(status_code=404, detail="Grupa not found")
 
     setattr(db_grupa, 'opis', grupa_data.opis)
-    setattr(db_grupa, 'id', grupa_data.id)
     setattr(db_grupa, 'cena', grupa_data.cena)
     setattr(db_grupa, 'naziv', grupa_data.naziv)
 
@@ -2160,8 +2158,6 @@ async def create_klijent(klijent_data: KlijentCreate, database: Session = Depend
         prezime=klijent_data.prezime,
         broj_telefona=klijent_data.broj_telefona
     )
-    if klijent_data.id is not None:
-        klijent_kwargs["id"] = klijent_data.id
 
     db_klijent = Klijent(**klijent_kwargs)
 
@@ -2253,7 +2249,6 @@ async def update_klijent(klijent_id: int, klijent_data: KlijentCreate, database:
 
     setattr(db_klijent, 'ime', klijent_data.ime)
     setattr(db_klijent, 'email', klijent_data.email)
-    setattr(db_klijent, 'id', klijent_data.id)
     setattr(db_klijent, 'prezime', klijent_data.prezime)
     setattr(db_klijent, 'broj_telefona', klijent_data.broj_telefona)
 
