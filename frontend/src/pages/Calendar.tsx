@@ -16,6 +16,10 @@ interface Client {
   broj_telefona: string;
   email: string;
 }
+interface Group {
+  id: number;
+  naziv: string;
+}
 
 const DAYS = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"];
 const MONTHS = [
@@ -74,6 +78,7 @@ const Calendar: React.FC = () => {
   );
   const [sessions, setSessions] = useState<Session[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [links, setLinks] = useState<SesijaKlijent[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
@@ -90,6 +95,7 @@ const Calendar: React.FC = () => {
     cena: 4000,
     status: "zakazano",
     klijent_id: "",
+    grupa_id: "",
   });
 
   const backendBase =
@@ -121,6 +127,14 @@ const Calendar: React.FC = () => {
     }
   };
 
+const fetchGroups = async () => {
+  try {
+    const res = await axios.get(`${backendBase}/grupa/`);
+    setGroups(Array.isArray(res.data) ? res.data : []);
+  } catch (err) {
+    console.error("Error fetching groups:", err);
+  }
+};
   const fetchLinks = async () => {
     try {
       const res = await axios.get(`${backendBase}/sesijaklijent/`);
@@ -133,6 +147,7 @@ const Calendar: React.FC = () => {
     useEffect(() => {
       fetchSessions();
       fetchClients();
+      fetchGroups();
       fetchLinks();
     }, []);
 
@@ -208,6 +223,7 @@ const Calendar: React.FC = () => {
       cena: 4000,
       status: "zakazano",
       klijent_id: "",
+      grupa_id: "",
     });
     setSelectedSession(null);
     setShowModal(true);
@@ -225,6 +241,7 @@ const Calendar: React.FC = () => {
       cena: session.cena,
       status: session.status,
       klijent_id: "",
+      grupa_id:"",
     });
     setSelectedSession(session);
     setShowModal(true);
@@ -280,6 +297,7 @@ const Calendar: React.FC = () => {
         sesijaklijent_1: null,
         sesijagrupa_1: null,
         klijent_id: formData.klijent_id ? parseInt(formData.klijent_id) : null,
+        grupa_id: formData.grupa_id ? parseInt(formData.grupa_id) : null,
       };
       if (selectedSession) {
         await axios.put(
@@ -697,22 +715,49 @@ const Calendar: React.FC = () => {
                 </div>
               </div>
               {!selectedSession && (
-                <div className="cal-form-group">
-                  <label>Klijent (opciono)</label>
-                  <select
-                    value={formData.klijent_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, klijent_id: e.target.value })
-                    }
-                  >
-                    <option value="">-- Izaberite klijenta --</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.ime} {c.prezime}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <>
+                  <div className="cal-form-group">
+                    <label>Klijent (opciono)</label>
+                    <select
+                      value={formData.klijent_id}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          klijent_id: e.target.value,
+                          grupa_id: "", // reset group
+                        })
+                      }
+                    >
+                      <option value="">-- Izaberite klijenta --</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.ime} {c.prezime}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="cal-form-group">
+                    <label>Grupa (opciono)</label>
+                    <select
+                      value={formData.grupa_id}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          grupa_id: e.target.value,
+                          klijent_id: "", // reset client
+                        })
+                      }
+                    >
+                      <option value="">-- Izaberite grupu --</option>
+                      {groups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.naziv}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
             </div>
             <div className="cal-modal-footer">
