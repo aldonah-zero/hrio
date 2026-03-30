@@ -190,9 +190,9 @@ const sessionGroupMap = useMemo(() => {
   });
 
   sessionGroups.forEach((link) => {
-    const group = groupMap[link.grupa]; // <-- promena
+    const group = groupMap[link.grupa_id];
     if (group) {
-      map[link.sesija] = `Grupa: ${group.naziv}`; // <-- promena
+      map[link.sesija_1_id] = `Grupa: ${group.naziv}`;
     }
   });
 
@@ -348,6 +348,7 @@ const sessionGroupMap = useMemo(() => {
       }
       await fetchSessions();
       await fetchLinks();
+      await fetchSessionGroups();
       setShowModal(false);
     } catch (err) {
       showToast("Greška pri čuvanju!", "error");
