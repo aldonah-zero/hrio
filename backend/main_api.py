@@ -157,12 +157,58 @@ Hvala vam što ste odabrali <strong style="color:#6b7280;">PsihApp</strong>.
 </div>
 """
 
+    # Email za psihologa (tvoj)
     resend.Emails.send({
         "from": "PsihApp <onboarding@resend.dev>",
-        "to": [client_email or "igorpavlov106@gmail.com"],
+        "to": ["igorpavlov106@gmail.com"],
         "subject": f"{c['icon']} {c['title']} - {client_name}",
         "html": html
     })
+
+    # Email za klijenta (samo ako ima email i ako je zakazivanje)
+    if client_email and client_email != "igorpavlov106@gmail.com" and action == "created":
+        client_html = f"""
+    <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:520px;margin:auto;">
+
+    <div style="background:#fff;border-radius:16px;padding:28px 24px 24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+    <div style="font-size:22px;margin-bottom:8px;">✅ Potvrda zakazane sesije</div>
+    <div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Poštovani/a <strong>{client_name}</strong>,</div>
+    <div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Vaša sesija je uspešno zakazana.</div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+    <div style="border:1.5px dashed #d1d5db;border-radius:12px;padding:20px;">
+
+    <div style="font-size:15px;color:#333;margin-bottom:14px;">📅 <strong>{format_date_long(pocetak)}</strong></div>
+    <div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px;">{format_time(pocetak)} – {format_time(kraj)}</div>
+
+    <div style="border-top:1.5px dashed #d1d5db;margin:16px 0;"></div>
+
+    <div style="font-size:14px;color:#555;line-height:1.6;">
+    Molimo Vas da dođete <strong>5 minuta</strong> pre zakazanog termina.
+    </div>
+
+    </div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:8px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+    <div style="font-size:13px;color:#777;line-height:1.5;"><strong>Pravila otkazivanja</strong><br>Sesija se može otkazati najkasnije <strong>24 sata</strong> pre termina.<br>Kašnjenje duže od <strong>10 minuta</strong> smatra se propuštenom sesijom.</div>
+    </div>
+
+    <div style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px;line-height:1.5;">
+    Hvala vam na poverenju. <strong style="color:#6b7280;">PsihApp</strong>
+    </div>
+
+    </div>
+    </div>
+    """
+        resend.Emails.send({
+            "from": "PsihApp <onboarding@resend.dev>",
+            "to": [client_email],
+            "subject": f"✅ Potvrda sesije - {format_date_long(pocetak)}",
+            "html": client_html
+        })
 # def send_email(subject, body):
 #
 #     sender = "igorpavlov106@gmail.com"
@@ -1230,7 +1276,7 @@ async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(g
             pocetak=db_sesija.pocetak,
             kraj=db_sesija.kraj,
             cena=db_sesija.cena,
-            client_email="igorpavlov106@gmail.com"  # Uvek na tvoj email
+            client_email=client_email  # Uvek na tvoj email
         )
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
