@@ -488,7 +488,7 @@ export const TableComponent: React.FC<Props> = ({
   const [lookupOptions, setLookupOptions] = useState<Record<string, any[]>>({});
   const [validationError, setValidationError] = useState<string>("");
   const [modalClosing, setModalClosing] = useState(false);
-
+  const [tableSaving, setTableSaving] = useState(false);
   const closeModal = () => {
     setModalClosing(true);
     setTimeout(() => {
@@ -683,6 +683,7 @@ export const TableComponent: React.FC<Props> = ({
     alignSelf: "stretch",
     boxSizing: "border-box",
     overflow: "hidden",
+    position: "relative",
     ...styles,
   };
 
@@ -1156,7 +1157,34 @@ export const TableComponent: React.FC<Props> = ({
           {title}
         </h3>
       )}
-
+      {tableSaving && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(255,255,255,0.6)",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "8px",
+          }}
+        >
+          <div
+            style={{
+              padding: "8px 20px",
+              background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+              color: "#fff",
+              borderRadius: "10px",
+              fontSize: "13px",
+              fontWeight: 600,
+              boxShadow: "0 4px 12px rgba(99,102,241,0.3)",
+            }}
+          >
+            Čuvam...
+          </div>
+        </div>
+      )}
       {resolvedOptions.actionButtons && (
         <div
           style={{
@@ -1276,7 +1304,7 @@ export const TableComponent: React.FC<Props> = ({
                           }
                         }
                       } else if (col.columnType === "grupa_clanovi") {
-                        // Not required for now
+                        // Not required
                       } else {
                         const value = formValues[col.field];
                         if (
@@ -1305,7 +1333,6 @@ export const TableComponent: React.FC<Props> = ({
                   const processedValues: Record<string, any> = {};
                   formColumns.forEach((col) => {
                     if (col.columnType === "session_type") {
-                      // Add klijent_id or grupa_id based on session type
                       const st = formValues["session_type"];
                       if (st === "individualna") {
                         const kId = parseInt(formValues["klijent_id"], 10);
@@ -1369,92 +1396,50 @@ export const TableComponent: React.FC<Props> = ({
                     }
                   });
 
-                  if (modalMode === "add") {
-                    const url = endpoint.startsWith("/")
-                      ? backendBase + endpoint
-                      : endpoint;
-                    try {
+                  // Close modal immediately, show saving indicator
+                  closeModal();
+                  setTableSaving(true);
+
+                  try {
+                    if (modalMode === "add") {
+                      const url = endpoint.startsWith("/")
+                        ? backendBase + endpoint
+                        : endpoint;
                       await axios.post(url, processedValues);
-                      await fetchTableData();
-                      closeModal();
-                    } catch (err) {
-                      console.error("Error saving data:", err);
-                      if (axios.isAxiosError(err) && err.response) {
-                        const detail = err.response.data?.detail;
-                        if (detail) {
-                          if (Array.isArray(detail)) {
-                            const errorMessages = detail
-                              .map((e: any) => {
-                                const field = e.loc
-                                  ? e.loc[e.loc.length - 1]
-                                  : "field";
-                                return `${field}: ${e.msg}`;
-                              })
-                              .join("; ");
-                            setValidationError(errorMessages);
-                          } else if (typeof detail === "string") {
-                            setValidationError(detail);
-                          } else {
-                            setValidationError(JSON.stringify(detail));
-                          }
-                        } else if (err.response.data?.message) {
-                          setValidationError(err.response.data.message);
-                        } else {
-                          setValidationError(
-                            "Greška pri čuvanju. Proverite unos.",
-                          );
-                        }
-                      } else {
-                        setValidationError(
-                          "Greška na mreži. Pokušajte ponovo.",
-                        );
-                      }
-                      return;
-                    }
-                  } else if (modalMode === "edit") {
-                    const rowId = getRowId(editRowData);
-                    const url = endpoint.replace(/\/$/, "");
-                    const fullUrl = url.startsWith("/")
-                      ? `${backendBase}${url}/${rowId}/`
-                      : `${url}/${rowId}/`;
-                    try {
+                    } else if (modalMode === "edit") {
+                      const rowId = getRowId(editRowData);
+                      const url = endpoint.replace(/\/$/, "");
+                      const fullUrl = url.startsWith("/")
+                        ? `${backendBase}${url}/${rowId}/`
+                        : `${url}/${rowId}/`;
                       await axios.put(fullUrl, processedValues);
-                      await fetchTableData();
-                      closeModal();
-                    } catch (err) {
-                      console.error("Error updating data:", err);
-                      if (axios.isAxiosError(err) && err.response) {
-                        const detail = err.response.data?.detail;
-                        if (detail) {
-                          if (Array.isArray(detail)) {
-                            const errorMessages = detail
-                              .map((e: any) => {
-                                const field = e.loc
-                                  ? e.loc[e.loc.length - 1]
-                                  : "field";
-                                return `${field}: ${e.msg}`;
-                              })
-                              .join("; ");
-                            setValidationError(errorMessages);
-                          } else if (typeof detail === "string") {
-                            setValidationError(detail);
-                          } else {
-                            setValidationError(JSON.stringify(detail));
-                          }
-                        } else if (err.response.data?.message) {
-                          setValidationError(err.response.data.message);
-                        } else {
-                          setValidationError(
-                            "Greška pri ažuriranju. Proverite unos.",
-                          );
-                        }
-                      } else {
-                        setValidationError(
-                          "Greška na mreži. Pokušajte ponovo.",
-                        );
-                      }
-                      return;
                     }
+                    await fetchTableData();
+                  } catch (err) {
+                    console.error("Error saving data:", err);
+                    if (axios.isAxiosError(err) && err.response) {
+                      const detail = err.response.data?.detail;
+                      if (detail) {
+                        setShowModal(true);
+                        if (Array.isArray(detail)) {
+                          setValidationError(
+                            detail
+                              .map(
+                                (e: any) =>
+                                  `${e.loc?.[e.loc.length - 1] || "field"}: ${e.msg}`,
+                              )
+                              .join("; "),
+                          );
+                        } else if (typeof detail === "string") {
+                          setValidationError(detail);
+                        } else {
+                          setValidationError(JSON.stringify(detail));
+                        }
+                      }
+                    }
+                    await fetchTableData();
+                  } finally {
+                    setTableSaving(false);
                   }
                 }}
                 className="table-modal-form"
@@ -1724,11 +1709,18 @@ export const TableComponent: React.FC<Props> = ({
                               const fullUrl = url.startsWith("/")
                                 ? `${backendBase}${url}/${rowId}/`
                                 : `${url}/${rowId}/`;
+
+                              // Optimistic removal
+                              setTableData((prev) =>
+                                prev.filter((r) => getRowId(r) !== rowId),
+                              );
+
                               try {
                                 await axios.delete(fullUrl);
                                 await fetchTableData();
                               } catch (err) {
                                 console.error("Error deleting data:", err);
+                                await fetchTableData();
                               }
                             }}
                           >
