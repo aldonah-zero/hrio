@@ -466,6 +466,90 @@
     padding-bottom: 12vh;
   }
 
+  .table-modal-box {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0 0 20px 20px;
+    max-height: 85vh;
+    animation: tmSheetDown2 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .table-modal-box.closing {
+    animation: tmSheetUp2 0.25s ease forwards;
+  }
+
+  @keyframes tmSheetDown2 {
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes tmSheetUp2 {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
+
+  .table-modal-title {
+    padding: 20px 20px 0;
+    font-size: 18px;
+  }
+
+  .table-modal-form-fields {
+    padding: 16px 20px;
+    gap: 14px;
+  }
+
+  .table-modal-footer {
+    padding: 12px 20px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    position: sticky;
+    bottom: 0;
+    background: #ffffff;
+    border-top: 1px solid #f1f5f9;
+  }
+
+  .table-form-input,
+  .table-form-select {
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+
+  .table-btn {
+    padding: 12px 18px;
+    flex: 1;
+    text-align: center;
+  }
+
+  .table-modal-close {
+    top: 14px;
+    right: 14px;
+  }
+
+  .table-modal-error {
+    margin: 12px 20px 0;
+  }
+
+  .table-pagination {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .table-pagination-controls {
+    justify-content: center;
+  }
 }
 
 
