@@ -152,12 +152,13 @@ const fetchGroups = async () => {
   };
 
     useEffect(() => {
-      fetchSessions();
-      fetchClients();
-      fetchGroups();
-      fetchLinks();
-      fetchSessionGroups();
-
+      Promise.all([
+        fetchSessions(),
+        fetchClients(),
+        fetchGroups(),
+        fetchLinks(),
+        fetchSessionGroups(),
+      ]);
     }, []);
 
   // Build a map: sessionId → client name(s)
@@ -282,20 +283,26 @@ const sessionGroupMap = useMemo(() => {
     if (e) e.stopPropagation();
     setDeletingId(sessionId);
     await new Promise((r) => setTimeout(r, 350));
+
+    // Optimistic removal from all state
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    setLinks((prev) => prev.filter((l) => l.sesija_id !== sessionId));
+    setSessionGroups((prev) =>
+      prev.filter((sg: any) => sg.sesija_1_id !== sessionId),
+    );
     setDeletingId(null);
     if (showModal && selectedSession?.id === sessionId) setShowModal(false);
+
     try {
       await axios.delete(`${backendBase}/sesija/${sessionId}/`);
       showToast("Sesija obrisana");
     } catch (err: any) {
-      // 404 or 409 means already deleted — treat as success
       const status = err?.response?.status;
       if (status === 404 || status === 409) {
         showToast("Sesija obrisana");
       } else {
         showToast("Greška pri brisanju!", "error");
-        fetchSessions();
+        Promise.all([fetchSessions(), fetchLinks(), fetchSessionGroups()]);
       }
     }
   };
@@ -306,8 +313,6 @@ const sessionGroupMap = useMemo(() => {
       const newId = selectedSession
         ? selectedSession.id
         : Math.floor(Math.random() * 900000) + 100000;
-      // Send datetime as-is (local time) — don't convert to UTC with toISOString()
-      // Add ":00" seconds if needed for backend datetime parsing
       const pocetakStr =
         formData.pocetak.length === 16
           ? formData.pocetak + ":00"
@@ -326,30 +331,79 @@ const sessionGroupMap = useMemo(() => {
         klijent_id: formData.klijent_id ? parseInt(formData.klijent_id) : null,
         grupa_id: formData.grupa_id ? parseInt(formData.grupa_id) : null,
       };
+
       if (selectedSession) {
-        await axios.put(
-          `${backendBase}/sesija/${selectedSession.id}/`,
-          payload,
+        // EDIT — optimistic update
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === selectedSession.id
+              ? {
+                  ...s,
+                  pocetak: pocetakStr,
+                  kraj: krajStr,
+                  cena: formData.cena,
+                  status: formData.status,
+                }
+              : s,
+          ),
         );
+        setShowModal(false);
         showToast("Sesija ažurirana");
+
+        axios
+          .put(`${backendBase}/sesija/${selectedSession.id}/`, payload)
+          .then(() =>
+            Promise.all([fetchSessions(), fetchLinks(), fetchSessionGroups()]),
+          )
+          .catch(() => {
+            showToast("Greška pri čuvanju!", "error");
+            Promise.all([fetchSessions(), fetchLinks(), fetchSessionGroups()]);
+          });
       } else {
-        const res = await axios.post(`${backendBase}/sesija/`, payload);
-        const createdId = res.data?.sesija?.id || res.data?.id || newId;
+        // CREATE — optimistic insert
+        const optimisticSession: Session = {
+          id: newId,
+          pocetak: pocetakStr,
+          kraj: krajStr,
+          cena: formData.cena,
+          status: formData.status,
+        };
+        setSessions((prev) => [...prev, optimisticSession]);
+
         if (formData.klijent_id) {
-          try {
-            await axios.post(`${backendBase}/sesijaklijent/`, {
-              id: Math.floor(Math.random() * 900000) + 100000,
-              sesija: createdId,
-              klijent: parseInt(formData.klijent_id),
-            });
-          } catch {}
+          setLinks((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              sesija_id: newId,
+              klijent_id: parseInt(formData.klijent_id),
+            },
+          ]);
         }
+        if (formData.grupa_id) {
+          setSessionGroups((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              sesija_1_id: newId,
+              grupa_id: parseInt(formData.grupa_id),
+            },
+          ]);
+        }
+
+        setShowModal(false);
         showToast("Nova sesija kreirana");
+
+        axios
+          .post(`${backendBase}/sesija/`, payload)
+          .then(() =>
+            Promise.all([fetchSessions(), fetchLinks(), fetchSessionGroups()]),
+          )
+          .catch(() => {
+            showToast("Greška pri čuvanju!", "error");
+            Promise.all([fetchSessions(), fetchLinks(), fetchSessionGroups()]);
+          });
       }
-      await fetchSessions();
-      await fetchLinks();
-      await fetchSessionGroups();
-      setShowModal(false);
     } catch (err) {
       showToast("Greška pri čuvanju!", "error");
     } finally {
