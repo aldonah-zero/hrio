@@ -19,6 +19,10 @@ interface Client {
 interface Group {
   id: number;
   naziv: string;
+  cena?: number;
+  opis?: string;
+  clanovi_imena?: string;
+  broj_clanova?: number;
 }
 
 const DAYS = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"];
@@ -258,18 +262,24 @@ const sessionGroupMap = useMemo(() => {
   };
 
   const openEditSession = (session: Session) => {
-    // Backend stores local time as-is, just format for datetime-local input (needs "YYYY-MM-DDTHH:MM")
     const toInputFormat = (s: string) => {
-      // Handle both "2026-03-27T17:00:00" and "2026-03-27 17:00:00" formats
       return s.replace(" ", "T").slice(0, 16);
     };
+
+    // Find if this session has a group link
+    const groupLink = sessionGroups.find(
+      (sg: any) => sg.sesija_1_id === session.id,
+    );
+    // Find if this session has a client link
+    const clientLink = links.find((l) => l.sesija_id === session.id);
+
     setFormData({
       pocetak: toInputFormat(session.pocetak),
       kraj: toInputFormat(session.kraj),
       cena: session.cena,
       status: session.status,
-      klijent_id: "",
-      grupa_id:"",
+      klijent_id: clientLink ? String(clientLink.klijent_id) : "",
+      grupa_id: groupLink ? String(groupLink.grupa_id) : "",
     });
     setSelectedSession(session);
     setShowModal(true);
@@ -802,46 +812,134 @@ const sessionGroupMap = useMemo(() => {
               </div>
               {!selectedSession && (
                 <>
-                  <div className="cal-form-group">
-                    <label>Klijent (opciono)</label>
-                    <select
-                      value={formData.klijent_id}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          klijent_id: e.target.value,
-                          grupa_id: "", // reset group
-                        })
-                      }
-                    >
-                      <option value="">-- Izaberite klijenta --</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.ime} {c.prezime}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <div className="cal-modal-body">
+                    <div className="cal-form-group">
+                      <label>Početak</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.pocetak}
+                        onChange={(e) =>
+                          setFormData({ ...formData, pocetak: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="cal-form-group">
+                      <label>Kraj</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.kraj}
+                        onChange={(e) =>
+                          setFormData({ ...formData, kraj: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="cal-form-row">
+                      <div className="cal-form-group">
+                        <label>Cena (RSD)</label>
+                        <input
+                          type="number"
+                          value={formData.cena}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              cena: Number(e.target.value),
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="cal-form-group">
+                        <label>Status</label>
+                        <select
+                          value={formData.status}
+                          onChange={(e) =>
+                            setFormData({ ...formData, status: e.target.value })
+                          }
+                        >
+                          <option value="zakazano">Zakazano</option>
+                          <option value="zavrseno">Završeno</option>
+                          <option value="otkazano">Otkazano</option>
+                        </select>
+                      </div>
+                    </div>
 
-                  <div className="cal-form-group">
-                    <label>Grupa (opciono)</label>
-                    <select
-                      value={formData.grupa_id}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          grupa_id: e.target.value,
-                          klijent_id: "", // reset client
-                        })
-                      }
-                    >
-                      <option value="">-- Izaberite grupu --</option>
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.naziv}
-                        </option>
-                      ))}
-                    </select>
+                    {/* Klijent/Grupa selection - for both new and edit */}
+                    <div className="cal-form-group">
+                      <label>Klijent (opciono)</label>
+                      <select
+                        value={formData.klijent_id}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            klijent_id: e.target.value,
+                            grupa_id: "",
+                          })
+                        }
+                      >
+                        <option value="">-- Izaberite klijenta --</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.ime} {c.prezime}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="cal-form-group">
+                      <label>Grupa (opciono)</label>
+                      <select
+                        value={formData.grupa_id}
+                        onChange={(e) => {
+                          const grupaId = e.target.value;
+                          const selectedGrupa = groups.find(
+                            (g) => g.id === parseInt(grupaId),
+                          );
+                          setFormData({
+                            ...formData,
+                            grupa_id: grupaId,
+                            klijent_id: "",
+                            cena: selectedGrupa
+                              ? (selectedGrupa as any).cena || formData.cena
+                              : formData.cena,
+                          });
+                        }}
+                      >
+                        <option value="">-- Izaberite grupu --</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.naziv}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Show group members when a group is selected */}
+                    {formData.grupa_id &&
+                      (() => {
+                        const grupaId = parseInt(formData.grupa_id);
+                        const grupa = groups.find((g) => g.id === grupaId);
+                        const memberNames = clients.filter((c) =>
+                          // We need grupaklijent data - for now use what we have
+                          (grupa as any)?.clanovi_imena ? true : false,
+                        );
+                        return (grupa as any)?.clanovi_imena ? (
+                          <div className="cal-form-group">
+                            <label>Članovi grupe</label>
+                            <div
+                              style={{
+                                padding: "10px 12px",
+                                backgroundColor: "#f8fafc",
+                                borderRadius: "8px",
+                                border: "1px solid #e2e8f0",
+                                fontSize: "13px",
+                                color: "#475569",
+                                lineHeight: "1.6",
+                              }}
+                            >
+                              {(grupa as any).clanovi_imena}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
                   </div>
                 </>
               )}
