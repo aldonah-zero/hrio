@@ -869,26 +869,7 @@ const sessionGroupMap = useMemo(() => {
                 </div>
               )}
 
-              {/* Switch link: allow changing between klijent and grupa */}
-              {(formData.klijent_id || formData.grupa_id) && (
-                <button
-                  type="button"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#6366f1",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                    padding: "4px 0",
-                    marginBottom: "8px",
-                  }}
-                  onClick={() =>
-                    setFormData({ ...formData, klijent_id: "", grupa_id: "" })
-                  }
-                >
-                  ↻ Promeni klijenta/grupu
-                </button>
-              )}
+              
 
               {formData.grupa_id &&
                 (() => {
