@@ -1171,16 +1171,40 @@ export const TableComponent: React.FC<Props> = ({
             backdropFilter: "blur(2px)",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "12px",
-            }}
+          <svg
+            width="44"
+            height="44"
+            viewBox="0 0 44 44"
+            xmlns="http://www.w3.org/2000/svg"
           >
-            <div className="table-spinner" />
-          </div>
+            <circle
+              cx="22"
+              cy="22"
+              r="18"
+              fill="none"
+              stroke="#e2e8f0"
+              strokeWidth="3.5"
+            />
+            <circle
+              cx="22"
+              cy="22"
+              r="18"
+              fill="none"
+              stroke="#6366f1"
+              strokeWidth="3.5"
+              strokeDasharray="80 33"
+              strokeLinecap="round"
+            >
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from="0 22 22"
+                to="360 22 22"
+                dur="0.7s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          </svg>
         </div>
       )}
       {resolvedOptions.actionButtons && (
