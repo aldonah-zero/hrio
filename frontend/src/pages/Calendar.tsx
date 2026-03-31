@@ -190,9 +190,9 @@ const sessionGroupMap = useMemo(() => {
   });
 
   sessionGroups.forEach((link) => {
-    const group = groupMap[link.grupa_id];
+    const group = groupMap[link.grupa_id]; // <-- CORRECT
     if (group) {
-      map[link.sesija_1_id] = `Grupa: ${group.naziv}`;
+      map[link.sesija_1_id] = `Grupa: ${group.naziv}`; // <-- CORRECT
     }
   });
 
