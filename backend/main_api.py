@@ -1285,31 +1285,43 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
             result.append(item_dict)
         return result
     else:
+        # Bulk load everything in 5 queries total (instead of 4 per session)
         sesija_list = database.query(Sesija).all()
+        all_sk = database.query(SesijaKlijent).all()
+        all_sg = database.query(SesijaGrupa).all()
+        all_klijenti = database.query(Klijent).all()
+        all_grupe = database.query(Grupa).all()
+
+        # Build lookup maps
+        klijent_map = {k.id: k for k in all_klijenti}
+        grupa_map = {g.id: g for g in all_grupe}
+        sk_map = {}
+        for sk in all_sk:
+            sk_map[sk.sesija_id] = sk.klijent_id
+        sg_map = {}
+        for sg in all_sg:
+            sg_map[sg.sesija_1_id] = sg.grupa_id
+
         result = []
         for s in sesija_list:
             item = s.__dict__.copy()
             item.pop('_sa_instance_state', None)
 
-            # Dodaj ime klijenta ili naziv grupe
-            sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == s.id).first()
-            if sk and sk.klijent_id:
-                klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
-                if klijent:
-                    item['klijent_ime'] = f"{klijent.ime} {klijent.prezime}"
-                else:
-                    item['klijent_ime'] = ""
+            # Client name from map
+            klijent_id = sk_map.get(s.id)
+            if klijent_id:
+                klijent = klijent_map.get(klijent_id)
+                item['klijent_ime'] = f"{klijent.ime} {klijent.prezime}" if klijent else ""
             else:
                 item['klijent_ime'] = ""
 
-            # Check if it's a group session
-            sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == s.id).first()
-            if sg and sg.grupa_id:
-                grupa = database.query(Grupa).filter(Grupa.id == sg.grupa_id).first()
+            # Group name from map
+            grupa_id = sg_map.get(s.id)
+            if grupa_id:
+                grupa = grupa_map.get(grupa_id)
                 if grupa:
                     item['grupa_naziv'] = grupa.naziv
                     item['grupa_id'] = grupa.id
-                    # If no individual client name, show group name
                     if not item['klijent_ime']:
                         item['klijent_ime'] = f"[Grupa] {grupa.naziv}"
                 else:
