@@ -266,17 +266,24 @@ const sessionGroupMap = useMemo(() => {
       return s.replace(" ", "T").slice(0, 16);
     };
 
-    // Find if this session has a group link
     const groupLink = sessionGroups.find(
       (sg: any) => sg.sesija_1_id === session.id,
     );
-    // Find if this session has a client link
     const clientLink = links.find((l) => l.sesija_id === session.id);
+
+    // If it's a group session, use the group's price
+    let cena = session.cena;
+    if (groupLink) {
+      const grupa = groups.find((g) => g.id === groupLink.grupa_id);
+      if (grupa?.cena) {
+        cena = grupa.cena;
+      }
+    }
 
     setFormData({
       pocetak: toInputFormat(session.pocetak),
       kraj: toInputFormat(session.kraj),
-      cena: session.cena,
+      cena: cena,
       status: session.status,
       klijent_id: clientLink ? String(clientLink.klijent_id) : "",
       grupa_id: groupLink ? String(groupLink.grupa_id) : "",
@@ -811,52 +818,77 @@ const sessionGroupMap = useMemo(() => {
                 </div>
               </div>
 
-              <div className="cal-form-group">
-                <label>Klijent (opciono)</label>
-                <select
-                  value={formData.klijent_id}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      klijent_id: e.target.value,
-                      grupa_id: "",
-                    })
+              {!formData.grupa_id && (
+                <div className="cal-form-group">
+                  <label>Klijent (opciono)</label>
+                  <select
+                    value={formData.klijent_id}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        klijent_id: e.target.value,
+                        grupa_id: "",
+                      })
+                    }
+                  >
+                    <option value="">-- Izaberite klijenta --</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.ime} {c.prezime}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {!formData.klijent_id && (
+                <div className="cal-form-group">
+                  <label>Grupa (opciono)</label>
+                  <select
+                    value={formData.grupa_id}
+                    onChange={(e) => {
+                      const grupaId = e.target.value;
+                      const selectedGrupa = groups.find(
+                        (g) => g.id === parseInt(grupaId),
+                      );
+                      setFormData({
+                        ...formData,
+                        grupa_id: grupaId,
+                        klijent_id: "",
+                        cena: selectedGrupa?.cena ?? formData.cena,
+                      });
+                    }}
+                  >
+                    <option value="">-- Izaberite grupu --</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.naziv}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Switch link: allow changing between klijent and grupa */}
+              {(formData.klijent_id || formData.grupa_id) && (
+                <button
+                  type="button"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#6366f1",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    padding: "4px 0",
+                    marginBottom: "8px",
+                  }}
+                  onClick={() =>
+                    setFormData({ ...formData, klijent_id: "", grupa_id: "" })
                   }
                 >
-                  <option value="">-- Izaberite klijenta --</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.ime} {c.prezime}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="cal-form-group">
-                <label>Grupa (opciono)</label>
-                <select
-                  value={formData.grupa_id}
-                  onChange={(e) => {
-                    const grupaId = e.target.value;
-                    const selectedGrupa = groups.find(
-                      (g) => g.id === parseInt(grupaId),
-                    );
-                    setFormData({
-                      ...formData,
-                      grupa_id: grupaId,
-                      klijent_id: "",
-                      cena: selectedGrupa?.cena ?? formData.cena,
-                    });
-                  }}
-                >
-                  <option value="">-- Izaberite grupu --</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.naziv}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  ↻ Promeni klijenta/grupu
+                </button>
+              )}
 
               {formData.grupa_id &&
                 (() => {
