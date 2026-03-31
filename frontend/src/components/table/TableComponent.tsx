@@ -1162,26 +1162,24 @@ export const TableComponent: React.FC<Props> = ({
           style={{
             position: "absolute",
             inset: 0,
-            backgroundColor: "rgba(255,255,255,0.6)",
+            backgroundColor: "rgba(255,255,255,0.7)",
             zIndex: 10,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             borderRadius: "8px",
+            backdropFilter: "blur(2px)",
           }}
         >
           <div
             style={{
-              padding: "8px 20px",
-              background: "linear-gradient(135deg, #6366f1, #7c3aed)",
-              color: "#fff",
-              borderRadius: "10px",
-              fontSize: "13px",
-              fontWeight: 600,
-              boxShadow: "0 4px 12px rgba(99,102,241,0.3)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "12px",
             }}
           >
-            Čuvam...
+            <div className="table-spinner" />
           </div>
         </div>
       )}
