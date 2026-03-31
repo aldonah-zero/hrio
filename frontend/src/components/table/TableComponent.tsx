@@ -1158,55 +1158,33 @@ export const TableComponent: React.FC<Props> = ({
         </h3>
       )}
       {tableSaving && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "rgba(255,255,255,0.7)",
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "8px",
-            backdropFilter: "blur(2px)",
-          }}
-        >
-          <svg
-            width="44"
-            height="44"
-            viewBox="0 0 44 44"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle
-              cx="22"
-              cy="22"
-              r="18"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="3.5"
-            />
-            <circle
-              cx="22"
-              cy="22"
-              r="18"
-              fill="none"
-              stroke="#6366f1"
-              strokeWidth="3.5"
-              strokeDasharray="80 33"
-              strokeLinecap="round"
-            >
-              <animateTransform
-                attributeName="transform"
-                type="rotate"
-                from="0 22 22"
-                to="360 22 22"
-                dur="0.7s"
-                repeatCount="indefinite"
-              />
-            </circle>
-          </svg>
-        </div>
-      )}
+  <div style={{
+    position: "absolute",
+    inset: 0,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    zIndex: 10,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "8px",
+    backdropFilter: "blur(2px)",
+  }}>
+    <svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="22" cy="22" r="18" fill="none" stroke="#e2e8f0" strokeWidth="3.5" />
+      <circle cx="22" cy="22" r="18" fill="none" stroke="#6366f1" strokeWidth="3.5"
+        strokeDasharray="80 33" strokeLinecap="round">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 22 22"
+          to="360 22 22"
+          dur="0.7s"
+          repeatCount="indefinite"
+        />
+      </circle>
+    </svg>
+  </div>
+)}
       {resolvedOptions.actionButtons && (
         <div
           style={{
@@ -1536,9 +1514,9 @@ export const TableComponent: React.FC<Props> = ({
                         textAlign: "center",
                         padding: "10px 4px",
                         fontWeight: 600,
-                        width: "40px",
-                        minWidth: "40px",
-                        maxWidth: "40px",
+                        width: "70px",
+                        minWidth: "70px",
+                        maxWidth: "70px",
                         overflow: "hidden",
                       }}
                     ></th>
@@ -1675,9 +1653,9 @@ export const TableComponent: React.FC<Props> = ({
                         style={{
                           textAlign: "center",
                           padding: "10px 2px",
-                          width: "40px",
-                          minWidth: "40px",
-                          maxWidth: "40px",
+                          width: "70px",
+                          minWidth: "70px",
+                          maxWidth: "70px",
                           overflow: "hidden",
                         }}
                       >
