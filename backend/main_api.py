@@ -4,17 +4,16 @@ import time as time_module
 import logging
 from fastapi import Depends, FastAPI, HTTPException, Request, status, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic_classes import *
 from sql_alchemy import *
-from fastapi.responses import StreamingResponse
 import io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from pydantic import BaseModel as PydanticBaseModel
+from openpyxl.utils import get_column_letter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -239,7 +238,6 @@ def send_session_email_to_group(action, grupa_naziv, pocetak, kraj, cena, client
     c = config[action]
     app_url = os.getenv("APP_URL", "https://hrio-frontend-5c8704.onrender.com/")
 
-    # Email za psihologa
     psiholog_html = f"""
 <div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
 <div style="max-width:520px;margin:auto;">
@@ -284,7 +282,6 @@ def send_session_email_to_group(action, grupa_naziv, pocetak, kraj, cena, client
         "html": psiholog_html
     })
 
-    # Email za svakog člana grupe koji ima email
     for member in client_emails:
         if not member.get("email"):
             continue
@@ -351,19 +348,15 @@ app.add_middleware(
 #
 ############################################
 
-# Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all incoming requests and responses."""
     logger.info(f"Incoming request: {request.method} {request.url.path}")
     response = await call_next(request)
     logger.info(f"Response status: {response.status_code}")
     return response
 
-# Request timing middleware
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
-    """Add processing time header to all responses."""
     start_time = time_module.time()
     response = await call_next(request)
     process_time = time_module.time() - start_time
@@ -376,66 +369,39 @@ async def add_process_time_header(request: Request, call_next):
 #
 ############################################
 
-# Global exception handlers
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
-    """Handle ValueError exceptions."""
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={
-            "error": "Bad Request",
-            "message": str(exc),
-            "detail": "Invalid input data provided"
-        }
+        content={"error": "Bad Request", "message": str(exc), "detail": "Invalid input data provided"}
     )
-
 
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError):
-    """Handle database integrity errors."""
     logger.error(f"Database integrity error: {exc}")
-
     error_detail = str(exc.orig) if hasattr(exc, 'orig') else str(exc)
-
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
-        content={
-            "error": "Conflict",
-            "message": "Data conflict occurred",
-            "detail": error_detail
-        }
+        content={"error": "Conflict", "message": "Data conflict occurred", "detail": error_detail}
     )
-
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
-    """Handle general SQLAlchemy errors."""
     logger.error(f"Database error: {exc}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "error": "Internal Server Error",
-            "message": "Database operation failed",
-            "detail": "An internal database error occurred"
-        }
+        content={"error": "Internal Server Error", "message": "Database operation failed", "detail": "An internal database error occurred"}
     )
-
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions with consistent format."""
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": exc.detail if isinstance(exc.detail, str) else "HTTP Error",
-            "message": exc.detail,
-            "detail": f"HTTP {exc.status_code} error occurred"
-        }
+        content={"error": exc.detail if isinstance(exc.detail, str) else "HTTP Error", "message": exc.detail, "detail": f"HTTP {exc.status_code} error occurred"}
     )
 
 # Initialize database session
 SessionLocal = init_db()
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
@@ -455,28 +421,15 @@ def get_db():
 
 @app.get("/", tags=["System"])
 def root():
-    """Root endpoint - API information"""
-    return {
-        "name": "Class_Diagram API",
-        "version": "1.0.0",
-        "status": "running"
-    }
-
+    return {"name": "Class_Diagram API", "version": "1.0.0", "status": "running"}
 
 @app.get("/health", tags=["System"])
 def health_check():
-    """Health check endpoint for monitoring"""
     from datetime import datetime
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "database": "connected"
-    }
-
+    return {"status": "healthy", "timestamp": datetime.now().isoformat(), "database": "connected"}
 
 @app.get("/statistics", tags=["System"])
 def get_statistics(database: Session = Depends(get_db)):
-    """Get database statistics for all entities"""
     stats = {}
     stats["cena_count"] = database.query(Cena).count()
     stats["sesijagrupa_count"] = database.query(SesijaGrupa).count()
@@ -488,44 +441,34 @@ def get_statistics(database: Session = Depends(get_db)):
     stats["total_entities"] = sum(stats.values())
     return stats
 
-
 ############################################
 #
 #   BESSER Action Language standard lib
 #
 ############################################
 
-
 async def BAL_size(sequence:list) -> int:
     return len(sequence)
-
 async def BAL_is_empty(sequence:list) -> bool:
     return len(sequence) == 0
-
 async def BAL_add(sequence:list, elem) -> None:
     sequence.append(elem)
-
 async def BAL_remove(sequence:list, elem) -> None:
     sequence.remove(elem)
-
 async def BAL_contains(sequence:list, elem) -> bool:
     return elem in sequence
-
 async def BAL_filter(sequence:list, predicate) -> list:
     return [elem for elem in sequence if predicate(elem)]
-
 async def BAL_forall(sequence:list, predicate) -> bool:
     for elem in sequence:
         if not predicate(elem):
             return False
     return True
-
 async def BAL_exists(sequence:list, predicate) -> bool:
     for elem in sequence:
         if predicate(elem):
             return True
     return False
-
 async def BAL_one(sequence:list, predicate) -> bool:
     found = False
     for elem in sequence:
@@ -534,14 +477,11 @@ async def BAL_one(sequence:list, predicate) -> bool:
                 return False
             found = True
     return found
-
 async def BAL_is_unique(sequence:list, mapping) -> bool:
     mapped = [mapping(elem) for elem in sequence]
     return len(set(mapped)) == len(mapped)
-
 async def BAL_map(sequence:list, mapping) -> list:
     return [mapping(elem) for elem in sequence]
-
 async def BAL_reduce(sequence:list, reduce_fn, aggregator) -> any:
     for elem in sequence:
         aggregator = reduce_fn(aggregator, elem)
@@ -557,63 +497,45 @@ async def BAL_reduce(sequence:list, reduce_fn, aggregator) -> any:
 @app.get("/cena/", response_model=None, tags=["Cena"])
 def get_all_cena(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
-
     if detailed:
         query = database.query(Cena)
         query = query.options(joinedload(Cena.sesija_2))
         query = query.options(joinedload(Cena.klijent_1))
         cena_list = query.all()
-
         result = []
         for cena_item in cena_list:
             item_dict = cena_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             if cena_item.sesija_2:
-                related_obj = cena_item.sesija_2
-                related_dict = related_obj.__dict__.copy()
+                related_dict = cena_item.sesija_2.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['sesija_2'] = related_dict
             else:
                 item_dict['sesija_2'] = None
             if cena_item.klijent_1:
-                related_obj = cena_item.klijent_1
-                related_dict = related_obj.__dict__.copy()
+                related_dict = cena_item.klijent_1.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['klijent_1'] = related_dict
             else:
                 item_dict['klijent_1'] = None
-
             result.append(item_dict)
         return result
     else:
         return database.query(Cena).all()
 
-
 @app.get("/cena/count/", response_model=None, tags=["Cena"])
 def get_count_cena(database: Session = Depends(get_db)) -> dict:
-    count = database.query(Cena).count()
-    return {"count": count}
-
+    return {"count": database.query(Cena).count()}
 
 @app.get("/cena/paginated/", response_model=None, tags=["Cena"])
 def get_paginated_cena(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
     total = database.query(Cena).count()
     cena_list = database.query(Cena).offset(skip).limit(limit).all()
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": cena_list
-    }
-
+    return {"total": total, "skip": skip, "limit": limit, "data": cena_list}
 
 @app.get("/cena/search/", response_model=None, tags=["Cena"])
 def search_cena(database: Session = Depends(get_db)) -> list:
-    query = database.query(Cena)
-    results = query.all()
-    return results
-
+    return database.query(Cena).all()
 
 @app.get("/cena/{cena_id}/", response_model=None, tags=["Cena"])
 async def get_cena(cena_id: int, database: Session = Depends(get_db)) -> Cena:
@@ -621,7 +543,6 @@ async def get_cena(cena_id: int, database: Session = Depends(get_db)) -> Cena:
     if db_cena is None:
         raise HTTPException(status_code=404, detail="Cena not found")
     return {"cena": db_cena}
-
 
 @app.post("/cena/", response_model=None, tags=["Cena"])
 async def create_cena(cena_data: CenaCreate, database: Session = Depends(get_db)) -> Cena:
@@ -637,63 +558,36 @@ async def create_cena(cena_data: CenaCreate, database: Session = Depends(get_db)
             raise HTTPException(status_code=400, detail="Klijent not found")
     else:
         raise HTTPException(status_code=400, detail="Klijent ID is required")
-
-    cena_kwargs = dict(
-        cena=cena_data.cena,
-        status=cena_data.status,
-        nacin_placanja=cena_data.nacin_placanja,
-        datum_uplate=cena_data.datum_uplate,
-        sesija_2_id=cena_data.sesija_2,
-        klijent_1_id=cena_data.klijent_1
-    )
+    cena_kwargs = dict(cena=cena_data.cena, status=cena_data.status, nacin_placanja=cena_data.nacin_placanja, datum_uplate=cena_data.datum_uplate, sesija_2_id=cena_data.sesija_2, klijent_1_id=cena_data.klijent_1)
     if cena_data.id is not None:
         cena_kwargs["id"] = cena_data.id
     db_cena = Cena(**cena_kwargs)
-
     database.add(db_cena)
     database.commit()
     database.refresh(db_cena)
     return db_cena
 
-
 @app.post("/cena/bulk/", response_model=None, tags=["Cena"])
 async def bulk_create_cena(items: list[CenaCreate], database: Session = Depends(get_db)) -> dict:
     created_items = []
     errors = []
-
     for idx, item_data in enumerate(items):
         try:
             if not item_data.sesija_2:
                 raise ValueError("Sesija ID is required")
             if not item_data.klijent_1:
                 raise ValueError("Klijent ID is required")
-
-            db_cena = Cena(
-                cena=item_data.cena,
-                id=item_data.id,
-                status=item_data.status,
-                nacin_placanja=item_data.nacin_placanja,
-                datum_uplate=item_data.datum_uplate,
-                sesija_2_id=item_data.sesija_2,
-                klijent_1_id=item_data.klijent_1
-            )
+            db_cena = Cena(cena=item_data.cena, id=item_data.id, status=item_data.status, nacin_placanja=item_data.nacin_placanja, datum_uplate=item_data.datum_uplate, sesija_2_id=item_data.sesija_2, klijent_1_id=item_data.klijent_1)
             database.add(db_cena)
             database.flush()
             created_items.append(db_cena.id)
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
-
     if errors:
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
-
     database.commit()
-    return {
-        "created_count": len(created_items),
-        "created_ids": created_items,
-        "message": f"Successfully created {len(created_items)} Cena entities"
-    }
-
+    return {"created_count": len(created_items), "created_ids": created_items, "message": f"Successfully created {len(created_items)} Cena entities"}
 
 @app.delete("/cena/bulk/", response_model=None, tags=["Cena"])
 async def bulk_delete_cena(ids: list[int], database: Session = Depends(get_db)) -> dict:
@@ -707,18 +601,13 @@ async def bulk_delete_cena(ids: list[int], database: Session = Depends(get_db)) 
         else:
             not_found.append(item_id)
     database.commit()
-    return {
-        "deleted_count": deleted_count,
-        "not_found": not_found,
-        "message": f"Successfully deleted {deleted_count} Cena entities"
-    }
+    return {"deleted_count": deleted_count, "not_found": not_found, "message": f"Successfully deleted {deleted_count} Cena entities"}
 
 @app.put("/cena/{cena_id}/", response_model=None, tags=["Cena"])
 async def update_cena(cena_id: int, cena_data: CenaCreate, database: Session = Depends(get_db)) -> Cena:
     db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
     if db_cena is None:
         raise HTTPException(status_code=404, detail="Cena not found")
-
     setattr(db_cena, 'cena', cena_data.cena)
     setattr(db_cena, 'id', cena_data.id)
     setattr(db_cena, 'status', cena_data.status)
@@ -737,7 +626,6 @@ async def update_cena(cena_id: int, cena_data: CenaCreate, database: Session = D
     database.commit()
     database.refresh(db_cena)
     return db_cena
-
 
 @app.delete("/cena/{cena_id}/", response_model=None, tags=["Cena"])
 async def delete_cena(cena_id: int, database: Session = Depends(get_db)):
@@ -758,63 +646,45 @@ async def delete_cena(cena_id: int, database: Session = Depends(get_db)):
 @app.get("/sesijagrupa/", response_model=None, tags=["SesijaGrupa"])
 def get_all_sesijagrupa(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
-
     if detailed:
         query = database.query(SesijaGrupa)
         query = query.options(joinedload(SesijaGrupa.grupa))
         query = query.options(joinedload(SesijaGrupa.sesija_1))
         sesijagrupa_list = query.all()
-
         result = []
         for sesijagrupa_item in sesijagrupa_list:
             item_dict = sesijagrupa_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             if sesijagrupa_item.grupa:
-                related_obj = sesijagrupa_item.grupa
-                related_dict = related_obj.__dict__.copy()
+                related_dict = sesijagrupa_item.grupa.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['grupa'] = related_dict
             else:
                 item_dict['grupa'] = None
             if sesijagrupa_item.sesija_1:
-                related_obj = sesijagrupa_item.sesija_1
-                related_dict = related_obj.__dict__.copy()
+                related_dict = sesijagrupa_item.sesija_1.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['sesija_1'] = related_dict
             else:
                 item_dict['sesija_1'] = None
-
             result.append(item_dict)
         return result
     else:
         return database.query(SesijaGrupa).all()
 
-
 @app.get("/sesijagrupa/count/", response_model=None, tags=["SesijaGrupa"])
 def get_count_sesijagrupa(database: Session = Depends(get_db)) -> dict:
-    count = database.query(SesijaGrupa).count()
-    return {"count": count}
-
+    return {"count": database.query(SesijaGrupa).count()}
 
 @app.get("/sesijagrupa/paginated/", response_model=None, tags=["SesijaGrupa"])
 def get_paginated_sesijagrupa(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
     total = database.query(SesijaGrupa).count()
     sesijagrupa_list = database.query(SesijaGrupa).offset(skip).limit(limit).all()
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": sesijagrupa_list
-    }
-
+    return {"total": total, "skip": skip, "limit": limit, "data": sesijagrupa_list}
 
 @app.get("/sesijagrupa/search/", response_model=None, tags=["SesijaGrupa"])
 def search_sesijagrupa(database: Session = Depends(get_db)) -> list:
-    query = database.query(SesijaGrupa)
-    results = query.all()
-    return results
-
+    return database.query(SesijaGrupa).all()
 
 @app.get("/sesijagrupa/{sesijagrupa_id}/", response_model=None, tags=["SesijaGrupa"])
 async def get_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(get_db)) -> SesijaGrupa:
@@ -822,7 +692,6 @@ async def get_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(get_d
     if db_sesijagrupa is None:
         raise HTTPException(status_code=404, detail="SesijaGrupa not found")
     return {"sesijagrupa": db_sesijagrupa}
-
 
 @app.post("/sesijagrupa/", response_model=None, tags=["SesijaGrupa"])
 async def create_sesijagrupa(sesijagrupa_data: SesijaGrupaCreate, database: Session = Depends(get_db)) -> SesijaGrupa:
@@ -838,20 +707,14 @@ async def create_sesijagrupa(sesijagrupa_data: SesijaGrupaCreate, database: Sess
             raise HTTPException(status_code=400, detail="Sesija not found")
     else:
         raise HTTPException(status_code=400, detail="Sesija ID is required")
-
-    sg_kwargs = dict(
-        grupa_id=sesijagrupa_data.grupa,
-        sesija_1_id=sesijagrupa_data.sesija_1
-    )
+    sg_kwargs = dict(grupa_id=sesijagrupa_data.grupa, sesija_1_id=sesijagrupa_data.sesija_1)
     if sesijagrupa_data.id is not None:
         sg_kwargs["id"] = sesijagrupa_data.id
     db_sesijagrupa = SesijaGrupa(**sg_kwargs)
-
     database.add(db_sesijagrupa)
     database.commit()
     database.refresh(db_sesijagrupa)
     return db_sesijagrupa
-
 
 @app.post("/sesijagrupa/bulk/", response_model=None, tags=["SesijaGrupa"])
 async def bulk_create_sesijagrupa(items: list[SesijaGrupaCreate], database: Session = Depends(get_db)) -> dict:
@@ -863,11 +726,7 @@ async def bulk_create_sesijagrupa(items: list[SesijaGrupaCreate], database: Sess
                 raise ValueError("Grupa ID is required")
             if not item_data.sesija_1:
                 raise ValueError("Sesija ID is required")
-            db_sesijagrupa = SesijaGrupa(
-                id=item_data.id,
-                grupa_id=item_data.grupa,
-                sesija_1_id=item_data.sesija_1
-            )
+            db_sesijagrupa = SesijaGrupa(id=item_data.id, grupa_id=item_data.grupa, sesija_1_id=item_data.sesija_1)
             database.add(db_sesijagrupa)
             database.flush()
             created_items.append(db_sesijagrupa.id)
@@ -877,12 +736,7 @@ async def bulk_create_sesijagrupa(items: list[SesijaGrupaCreate], database: Sess
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
     database.commit()
-    return {
-        "created_count": len(created_items),
-        "created_ids": created_items,
-        "message": f"Successfully created {len(created_items)} SesijaGrupa entities"
-    }
-
+    return {"created_count": len(created_items), "created_ids": created_items, "message": f"Successfully created {len(created_items)} SesijaGrupa entities"}
 
 @app.delete("/sesijagrupa/bulk/", response_model=None, tags=["SesijaGrupa"])
 async def bulk_delete_sesijagrupa(ids: list[int], database: Session = Depends(get_db)) -> dict:
@@ -896,11 +750,7 @@ async def bulk_delete_sesijagrupa(ids: list[int], database: Session = Depends(ge
         else:
             not_found.append(item_id)
     database.commit()
-    return {
-        "deleted_count": deleted_count,
-        "not_found": not_found,
-        "message": f"Successfully deleted {deleted_count} SesijaGrupa entities"
-    }
+    return {"deleted_count": deleted_count, "not_found": not_found, "message": f"Successfully deleted {deleted_count} SesijaGrupa entities"}
 
 @app.put("/sesijagrupa/{sesijagrupa_id}/", response_model=None, tags=["SesijaGrupa"])
 async def update_sesijagrupa(sesijagrupa_id: int, sesijagrupa_data: SesijaGrupaCreate, database: Session = Depends(get_db)) -> SesijaGrupa:
@@ -922,7 +772,6 @@ async def update_sesijagrupa(sesijagrupa_id: int, sesijagrupa_data: SesijaGrupaC
     database.refresh(db_sesijagrupa)
     return db_sesijagrupa
 
-
 @app.delete("/sesijagrupa/{sesijagrupa_id}/", response_model=None, tags=["SesijaGrupa"])
 async def delete_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(get_db)):
     db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
@@ -942,63 +791,45 @@ async def delete_sesijagrupa(sesijagrupa_id: int, database: Session = Depends(ge
 @app.get("/sesijaklijent/", response_model=None, tags=["SesijaKlijent"])
 def get_all_sesijaklijent(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
-
     if detailed:
         query = database.query(SesijaKlijent)
         query = query.options(joinedload(SesijaKlijent.klijent))
         query = query.options(joinedload(SesijaKlijent.sesija))
         sesijaklijent_list = query.all()
-
         result = []
         for sesijaklijent_item in sesijaklijent_list:
             item_dict = sesijaklijent_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             if sesijaklijent_item.klijent:
-                related_obj = sesijaklijent_item.klijent
-                related_dict = related_obj.__dict__.copy()
+                related_dict = sesijaklijent_item.klijent.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['klijent'] = related_dict
             else:
                 item_dict['klijent'] = None
             if sesijaklijent_item.sesija:
-                related_obj = sesijaklijent_item.sesija
-                related_dict = related_obj.__dict__.copy()
+                related_dict = sesijaklijent_item.sesija.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['sesija'] = related_dict
             else:
                 item_dict['sesija'] = None
-
             result.append(item_dict)
         return result
     else:
         return database.query(SesijaKlijent).all()
 
-
 @app.get("/sesijaklijent/count/", response_model=None, tags=["SesijaKlijent"])
 def get_count_sesijaklijent(database: Session = Depends(get_db)) -> dict:
-    count = database.query(SesijaKlijent).count()
-    return {"count": count}
-
+    return {"count": database.query(SesijaKlijent).count()}
 
 @app.get("/sesijaklijent/paginated/", response_model=None, tags=["SesijaKlijent"])
 def get_paginated_sesijaklijent(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
     total = database.query(SesijaKlijent).count()
     sesijaklijent_list = database.query(SesijaKlijent).offset(skip).limit(limit).all()
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": sesijaklijent_list
-    }
-
+    return {"total": total, "skip": skip, "limit": limit, "data": sesijaklijent_list}
 
 @app.get("/sesijaklijent/search/", response_model=None, tags=["SesijaKlijent"])
 def search_sesijaklijent(database: Session = Depends(get_db)) -> list:
-    query = database.query(SesijaKlijent)
-    results = query.all()
-    return results
-
+    return database.query(SesijaKlijent).all()
 
 @app.get("/sesijaklijent/{sesijaklijent_id}/", response_model=None, tags=["SesijaKlijent"])
 async def get_sesijaklijent(sesijaklijent_id: int, database: Session = Depends(get_db)) -> SesijaKlijent:
@@ -1006,7 +837,6 @@ async def get_sesijaklijent(sesijaklijent_id: int, database: Session = Depends(g
     if db_sesijaklijent is None:
         raise HTTPException(status_code=404, detail="SesijaKlijent not found")
     return {"sesijaklijent": db_sesijaklijent}
-
 
 @app.post("/sesijaklijent/", response_model=None, tags=["SesijaKlijent"])
 async def create_sesijaklijent(sesijaklijent_data: SesijaKlijentCreate, database: Session = Depends(get_db)) -> SesijaKlijent:
@@ -1022,20 +852,14 @@ async def create_sesijaklijent(sesijaklijent_data: SesijaKlijentCreate, database
             raise HTTPException(status_code=400, detail="Sesija not found")
     else:
         raise HTTPException(status_code=400, detail="Sesija ID is required")
-
-    sk_kwargs = dict(
-        klijent_id=sesijaklijent_data.klijent,
-        sesija_id=sesijaklijent_data.sesija
-    )
+    sk_kwargs = dict(klijent_id=sesijaklijent_data.klijent, sesija_id=sesijaklijent_data.sesija)
     if sesijaklijent_data.id is not None:
         sk_kwargs["id"] = sesijaklijent_data.id
     db_sesijaklijent = SesijaKlijent(**sk_kwargs)
-
     database.add(db_sesijaklijent)
     database.commit()
     database.refresh(db_sesijaklijent)
     return db_sesijaklijent
-
 
 @app.post("/sesijaklijent/bulk/", response_model=None, tags=["SesijaKlijent"])
 async def bulk_create_sesijaklijent(items: list[SesijaKlijentCreate], database: Session = Depends(get_db)) -> dict:
@@ -1047,11 +871,7 @@ async def bulk_create_sesijaklijent(items: list[SesijaKlijentCreate], database: 
                 raise ValueError("Klijent ID is required")
             if not item_data.sesija:
                 raise ValueError("Sesija ID is required")
-            db_sesijaklijent = SesijaKlijent(
-                id=item_data.id,
-                klijent_id=item_data.klijent,
-                sesija_id=item_data.sesija
-            )
+            db_sesijaklijent = SesijaKlijent(id=item_data.id, klijent_id=item_data.klijent, sesija_id=item_data.sesija)
             database.add(db_sesijaklijent)
             database.flush()
             created_items.append(db_sesijaklijent.id)
@@ -1061,12 +881,7 @@ async def bulk_create_sesijaklijent(items: list[SesijaKlijentCreate], database: 
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
     database.commit()
-    return {
-        "created_count": len(created_items),
-        "created_ids": created_items,
-        "message": f"Successfully created {len(created_items)} SesijaKlijent entities"
-    }
-
+    return {"created_count": len(created_items), "created_ids": created_items, "message": f"Successfully created {len(created_items)} SesijaKlijent entities"}
 
 @app.delete("/sesijaklijent/bulk/", response_model=None, tags=["SesijaKlijent"])
 async def bulk_delete_sesijaklijent(ids: list[int], database: Session = Depends(get_db)) -> dict:
@@ -1080,11 +895,7 @@ async def bulk_delete_sesijaklijent(ids: list[int], database: Session = Depends(
         else:
             not_found.append(item_id)
     database.commit()
-    return {
-        "deleted_count": deleted_count,
-        "not_found": not_found,
-        "message": f"Successfully deleted {deleted_count} SesijaKlijent entities"
-    }
+    return {"deleted_count": deleted_count, "not_found": not_found, "message": f"Successfully deleted {deleted_count} SesijaKlijent entities"}
 
 @app.put("/sesijaklijent/{sesijaklijent_id}/", response_model=None, tags=["SesijaKlijent"])
 async def update_sesijaklijent(sesijaklijent_id: int, sesijaklijent_data: SesijaKlijentCreate, database: Session = Depends(get_db)) -> SesijaKlijent:
@@ -1106,7 +917,6 @@ async def update_sesijaklijent(sesijaklijent_id: int, sesijaklijent_data: Sesija
     database.refresh(db_sesijaklijent)
     return db_sesijaklijent
 
-
 @app.delete("/sesijaklijent/{sesijaklijent_id}/", response_model=None, tags=["SesijaKlijent"])
 async def delete_sesijaklijent(sesijaklijent_id: int, database: Session = Depends(get_db)):
     db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
@@ -1119,48 +929,41 @@ async def delete_sesijaklijent(sesijaklijent_id: int, database: Session = Depend
 
 ############################################
 #
-#   GrupaKlijent functions (NEW - Group members)
+#   GrupaKlijent functions
 #
 ############################################
 
 @app.get("/grupaklijent/", response_model=None, tags=["GrupaKlijent"])
 def get_all_grupaklijent(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
-
     if detailed:
         query = database.query(GrupaKlijent)
         query = query.options(joinedload(GrupaKlijent.grupa))
         query = query.options(joinedload(GrupaKlijent.klijent))
         gk_list = query.all()
-
         result = []
         for gk_item in gk_list:
             item_dict = gk_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             if gk_item.grupa:
                 related_dict = gk_item.grupa.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['grupa'] = related_dict
             else:
                 item_dict['grupa'] = None
-
             if gk_item.klijent:
                 related_dict = gk_item.klijent.__dict__.copy()
                 related_dict.pop('_sa_instance_state', None)
                 item_dict['klijent'] = related_dict
             else:
                 item_dict['klijent'] = None
-
             result.append(item_dict)
         return result
     else:
         return database.query(GrupaKlijent).all()
 
-
 @app.get("/grupaklijent/by-grupa/{grupa_id}/", response_model=None, tags=["GrupaKlijent"])
 def get_grupaklijent_by_grupa(grupa_id: int, database: Session = Depends(get_db)) -> list:
-    """Get all members (klijenti) of a specific group"""
     gk_list = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).all()
     result = []
     for gk in gk_list:
@@ -1174,39 +977,26 @@ def get_grupaklijent_by_grupa(grupa_id: int, database: Session = Depends(get_db)
         result.append(item)
     return result
 
-
 @app.post("/grupaklijent/", response_model=None, tags=["GrupaKlijent"])
 async def create_grupaklijent(data: GrupaKlijentCreate, database: Session = Depends(get_db)):
     if data.grupa_id is None:
         raise HTTPException(status_code=400, detail="Grupa ID is required")
     if data.klijent_id is None:
         raise HTTPException(status_code=400, detail="Klijent ID is required")
-
     db_grupa = database.query(Grupa).filter(Grupa.id == data.grupa_id).first()
     if not db_grupa:
         raise HTTPException(status_code=400, detail="Grupa not found")
-
     db_klijent = database.query(Klijent).filter(Klijent.id == data.klijent_id).first()
     if not db_klijent:
         raise HTTPException(status_code=400, detail="Klijent not found")
-
-    # Check if already exists
-    existing = database.query(GrupaKlijent).filter(
-        GrupaKlijent.grupa_id == data.grupa_id,
-        GrupaKlijent.klijent_id == data.klijent_id
-    ).first()
+    existing = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == data.grupa_id, GrupaKlijent.klijent_id == data.klijent_id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Klijent is already in this group")
-
-    db_gk = GrupaKlijent(
-        grupa_id=data.grupa_id,
-        klijent_id=data.klijent_id
-    )
+    db_gk = GrupaKlijent(grupa_id=data.grupa_id, klijent_id=data.klijent_id)
     database.add(db_gk)
     database.commit()
     database.refresh(db_gk)
     return db_gk
-
 
 @app.delete("/grupaklijent/{grupaklijent_id}/", response_model=None, tags=["GrupaKlijent"])
 async def delete_grupaklijent(grupaklijent_id: int, database: Session = Depends(get_db)):
@@ -1217,18 +1007,12 @@ async def delete_grupaklijent(grupaklijent_id: int, database: Session = Depends(
     database.commit()
     return {"message": "Deleted", "id": grupaklijent_id}
 
-
 @app.put("/grupaklijent/sync/{grupa_id}/", response_model=None, tags=["GrupaKlijent"])
 async def sync_grupa_members(grupa_id: int, klijent_ids: list[int] = Body(...), database: Session = Depends(get_db)):
-    """Sync group members - replace all members with the given list of klijent IDs"""
     db_grupa = database.query(Grupa).filter(Grupa.id == grupa_id).first()
     if not db_grupa:
         raise HTTPException(status_code=404, detail="Grupa not found")
-
-    # Delete all existing members
     database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).delete()
-
-    # Add new members
     for klijent_id in klijent_ids:
         db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
         if not db_klijent:
@@ -1236,21 +1020,16 @@ async def sync_grupa_members(grupa_id: int, klijent_ids: list[int] = Body(...), 
             raise HTTPException(status_code=400, detail=f"Klijent with id {klijent_id} not found")
         db_gk = GrupaKlijent(grupa_id=grupa_id, klijent_id=klijent_id)
         database.add(db_gk)
-
     database.commit()
-
-    # Return updated list
     members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).all()
-    return {
-        "grupa_id": grupa_id,
-        "member_count": len(members),
-        "klijent_ids": [m.klijent_id for m in members]
-    }
+    return {"grupa_id": grupa_id, "member_count": len(members), "klijent_ids": [m.klijent_id for m in members]}
 
 
 ############################################
 #
 #   Sesija functions
+#   ROUTE ORDER MATTERS! export-excel and mark-paid
+#   MUST come BEFORE {sesija_id} routes
 #
 ############################################
 
@@ -1258,15 +1037,20 @@ async def sync_grupa_members(grupa_id: int, klijent_ids: list[int] = Body(...), 
 def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
 
+    # Load payment status for ALL branches
+    all_cene_paid = database.query(Cena).filter(Cena.status == "placeno").all()
+    paid_sesija_ids = set()
+    for c in all_cene_paid:
+        if c.sesija_2_id:
+            paid_sesija_ids.add(c.sesija_2_id)
+
     if detailed:
         query = database.query(Sesija)
         sesija_list = query.all()
-
         result = []
         for sesija_item in sesija_list:
             item_dict = sesija_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             cena_list = database.query(Cena).filter(Cena.sesija_2_id == sesija_item.id).all()
             item_dict['cena'] = []
             for cena_obj in cena_list:
@@ -1285,18 +1069,15 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
                 sesijagrupa_dict = sesijagrupa_obj.__dict__.copy()
                 sesijagrupa_dict.pop('_sa_instance_state', None)
                 item_dict['sesijagrupa_1'].append(sesijagrupa_dict)
-
+            item_dict['placeno'] = sesija_item.id in paid_sesija_ids
             result.append(item_dict)
         return result
     else:
-        # Bulk load everything in 5 queries total (instead of 4 per session)
         sesija_list = database.query(Sesija).all()
         all_sk = database.query(SesijaKlijent).all()
         all_sg = database.query(SesijaGrupa).all()
         all_klijenti = database.query(Klijent).all()
         all_grupe = database.query(Grupa).all()
-
-        # Build lookup maps
         klijent_map = {k.id: k for k in all_klijenti}
         grupa_map = {g.id: g for g in all_grupe}
         sk_map = {}
@@ -1305,21 +1086,16 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
         sg_map = {}
         for sg in all_sg:
             sg_map[sg.sesija_1_id] = sg.grupa_id
-
         result = []
         for s in sesija_list:
             item = s.__dict__.copy()
             item.pop('_sa_instance_state', None)
-
-            # Client name from map
             klijent_id = sk_map.get(s.id)
             if klijent_id:
                 klijent = klijent_map.get(klijent_id)
                 item['klijent_ime'] = f"{klijent.ime} {klijent.prezime}" if klijent else ""
             else:
                 item['klijent_ime'] = ""
-
-            # Group name from map
             grupa_id = sg_map.get(s.id)
             if grupa_id:
                 grupa = grupa_map.get(grupa_id)
@@ -1334,209 +1110,328 @@ def get_all_sesija(detailed: bool = False, database: Session = Depends(get_db)) 
             else:
                 item['grupa_naziv'] = ""
                 item['grupa_id'] = None
-
+            item['placeno'] = s.id in paid_sesija_ids
             result.append(item)
         return result
 
-
 @app.get("/sesija/count/", response_model=None, tags=["Sesija"])
 def get_count_sesija(database: Session = Depends(get_db)) -> dict:
-    count = database.query(Sesija).count()
-    return {"count": count}
-
+    return {"count": database.query(Sesija).count()}
 
 @app.get("/sesija/paginated/", response_model=None, tags=["Sesija"])
 def get_paginated_sesija(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
     total = database.query(Sesija).count()
     sesija_list = database.query(Sesija).offset(skip).limit(limit).all()
     if not detailed:
-        return {
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-            "data": sesija_list
-        }
-
+        return {"total": total, "skip": skip, "limit": limit, "data": sesija_list}
     result = []
     for sesija_item in sesija_list:
         cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == sesija_item.id).all()
         sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == sesija_item.id).all()
         sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == sesija_item.id).all()
-        item_data = {
-            "sesija": sesija_item,
-            "cena_ids": [x[0] for x in cena_ids],
-            "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
-            "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
-        }
+        item_data = {"sesija": sesija_item, "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids], "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
         result.append(item_data)
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": result
-    }
-
+    return {"total": total, "skip": skip, "limit": limit, "data": result}
 
 @app.get("/sesija/search/", response_model=None, tags=["Sesija"])
 def search_sesija(database: Session = Depends(get_db)) -> list:
-    query = database.query(Sesija)
-    results = query.all()
-    return results
+    return database.query(Sesija).all()
+
+# ============================================
+# EXPORT EXCEL — MUST be BEFORE /sesija/{sesija_id}/
+# ============================================
+@app.get("/sesija/export-excel/", response_model=None, tags=["Sesija"])
+def export_sesija_excel(database: Session = Depends(get_db)):
+    from datetime import date as date_type
+    sesija_list = database.query(Sesija).all()
+    all_sk = database.query(SesijaKlijent).all()
+    all_sg = database.query(SesijaGrupa).all()
+    all_klijenti = database.query(Klijent).all()
+    all_grupe = database.query(Grupa).all()
+    all_cene = database.query(Cena).all()
+    klijent_map = {k.id: k for k in all_klijenti}
+    grupa_map = {g.id: g for g in all_grupe}
+    sk_map = {sk.sesija_id: sk.klijent_id for sk in all_sk}
+    sg_map = {sg.sesija_1_id: sg.grupa_id for sg in all_sg}
+    payment_map = {}
+    for c in all_cene:
+        if c.status == "placeno" and c.sesija_2_id:
+            if c.sesija_2_id not in payment_map:
+                payment_map[c.sesija_2_id] = []
+            payment_map[c.sesija_2_id].append(c)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sesije"
+    header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="1E293B")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    cell_font = Font(name="Arial", size=10)
+    paid_fill = PatternFill("solid", fgColor="DCFCE7")
+    unpaid_fill = PatternFill("solid", fgColor="FEF3C7")
+    total_font = Font(name="Arial", bold=True, size=11)
+    total_fill = PatternFill("solid", fgColor="EEF2FF")
+    thin_border = Border(left=Side(style="thin", color="E2E8F0"), right=Side(style="thin", color="E2E8F0"), top=Side(style="thin", color="E2E8F0"), bottom=Side(style="thin", color="E2E8F0"))
+    ws.merge_cells("A1:K1")
+    title_cell = ws["A1"]
+    title_cell.value = f"Izvestaj sesija — {date_type.today().strftime('%d.%m.%Y')}"
+    title_cell.font = Font(name="Arial", bold=True, size=14, color="1E293B")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 35
+    headers = ["R.br.", "Klijent / Grupa", "Tip", "Datum", "Pocetak", "Kraj", "Cena (RSD)", "Status", "Placeno", "Nacin placanja", "Datum uplate"]
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+    ws.row_dimensions[3].height = 28
+    col_widths = [6, 25, 14, 14, 10, 10, 14, 14, 12, 16, 14]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    row_num = 4
+    total_cena = 0
+    total_placeno = 0
+    total_neplaceno = 0
+    for idx, s in enumerate(sesija_list, 1):
+        klijent_id = sk_map.get(s.id)
+        grupa_id = sg_map.get(s.id)
+        if klijent_id:
+            klijent = klijent_map.get(klijent_id)
+            ime = f"{klijent.ime} {klijent.prezime}" if klijent else "—"
+            tip = "Individualna"
+        elif grupa_id:
+            grupa = grupa_map.get(grupa_id)
+            ime = f"{grupa.naziv}" if grupa else "—"
+            tip = "Grupna"
+        else:
+            ime = "—"
+            tip = "—"
+        payments = payment_map.get(s.id, [])
+        is_paid = len(payments) > 0
+        nacin = payments[0].nacin_placanja if payments else "—"
+        datum_uplate_val = "—"
+        if payments and payments[0].datum_uplate:
+            try:
+                datum_uplate_val = payments[0].datum_uplate.strftime("%d.%m.%Y")
+            except Exception:
+                datum_uplate_val = str(payments[0].datum_uplate)
+        session_cena = s.cena if s.cena else 0
+        total_cena += session_cena
+        if is_paid:
+            total_placeno += session_cena
+        else:
+            total_neplaceno += session_cena
+        pocetak_datum = "—"
+        pocetak_vreme = "—"
+        kraj_vreme = "—"
+        try:
+            if s.pocetak:
+                pocetak_datum = s.pocetak.strftime("%d.%m.%Y")
+                pocetak_vreme = s.pocetak.strftime("%H:%M")
+            if s.kraj:
+                kraj_vreme = s.kraj.strftime("%H:%M")
+        except Exception:
+            pass
+        row_data = [idx, ime, tip, pocetak_datum, pocetak_vreme, kraj_vreme, session_cena, (s.status or "—").capitalize(), "Da" if is_paid else "Ne", (nacin or "—").capitalize(), datum_uplate_val]
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_num, column=col_idx, value=value)
+            cell.font = cell_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center" if col_idx != 2 else "left", vertical="center")
+        payment_cell = ws.cell(row=row_num, column=9)
+        if is_paid:
+            payment_cell.fill = paid_fill
+            payment_cell.font = Font(name="Arial", size=10, bold=True, color="166534")
+            for col_idx in range(1, len(headers) + 1):
+                if col_idx != 9:
+                    ws.cell(row=row_num, column=col_idx).fill = PatternFill("solid", fgColor="F0FDF4")
+        else:
+            payment_cell.fill = unpaid_fill
+            payment_cell.font = Font(name="Arial", size=10, bold=True, color="92400E")
+        row_num += 1
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:F{row_num}")
+    ws.cell(row=row_num, column=1, value="UKUPNO").font = total_font
+    ws.cell(row=row_num, column=1).fill = total_fill
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    ws.cell(row=row_num, column=7, value=total_cena).font = total_font
+    ws.cell(row=row_num, column=7).fill = total_fill
+    ws.cell(row=row_num, column=7).number_format = '#,##0'
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:F{row_num}")
+    ws.cell(row=row_num, column=1, value="Ukupno placeno").font = Font(name="Arial", bold=True, size=10, color="166534")
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    ws.cell(row=row_num, column=7, value=total_placeno).font = Font(name="Arial", bold=True, size=10, color="166534")
+    ws.cell(row=row_num, column=7).fill = paid_fill
+    ws.cell(row=row_num, column=7).number_format = '#,##0'
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:F{row_num}")
+    ws.cell(row=row_num, column=1, value="Ukupno neplaceno").font = Font(name="Arial", bold=True, size=10, color="92400E")
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    ws.cell(row=row_num, column=7, value=total_neplaceno).font = Font(name="Arial", bold=True, size=10, color="92400E")
+    ws.cell(row=row_num, column=7).fill = unpaid_fill
+    ws.cell(row=row_num, column=7).number_format = '#,##0'
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:F{row_num}")
+    ws.cell(row=row_num, column=1, value="Broj sesija").font = Font(name="Arial", size=10)
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    ws.cell(row=row_num, column=7, value=len(sesija_list)).font = Font(name="Arial", bold=True, size=10)
+    # Sheet 2: Per-client summary
+    ws2 = wb.create_sheet("Po klijentu")
+    ws2.merge_cells("A1:E1")
+    ws2["A1"].value = "Statistika po klijentu"
+    ws2["A1"].font = Font(name="Arial", bold=True, size=14, color="1E293B")
+    ws2["A1"].alignment = Alignment(horizontal="center")
+    ws2.row_dimensions[1].height = 35
+    client_headers = ["Klijent", "Br. sesija", "Ukupno (RSD)", "Placeno (RSD)", "Neplaceno (RSD)"]
+    for col_idx, h in enumerate(client_headers, 1):
+        cell = ws2.cell(row=3, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+    ws2.column_dimensions["A"].width = 28
+    ws2.column_dimensions["B"].width = 12
+    ws2.column_dimensions["C"].width = 16
+    ws2.column_dimensions["D"].width = 16
+    ws2.column_dimensions["E"].width = 16
+    client_stats = {}
+    for s in sesija_list:
+        klijent_id = sk_map.get(s.id)
+        grupa_id = sg_map.get(s.id)
+        if klijent_id:
+            klijent = klijent_map.get(klijent_id)
+            key = f"{klijent.ime} {klijent.prezime}" if klijent else f"Klijent #{klijent_id}"
+        elif grupa_id:
+            grupa = grupa_map.get(grupa_id)
+            key = f"[Grupa] {grupa.naziv}" if grupa else f"Grupa #{grupa_id}"
+        else:
+            key = "Nepoznato"
+        if key not in client_stats:
+            client_stats[key] = {"sessions": 0, "total": 0, "paid": 0, "unpaid": 0}
+        session_cena = s.cena if s.cena else 0
+        client_stats[key]["sessions"] += 1
+        client_stats[key]["total"] += session_cena
+        if s.id in payment_map:
+            client_stats[key]["paid"] += session_cena
+        else:
+            client_stats[key]["unpaid"] += session_cena
+    row2 = 4
+    for name, stats in sorted(client_stats.items()):
+        ws2.cell(row=row2, column=1, value=name).font = cell_font
+        ws2.cell(row=row2, column=2, value=stats["sessions"]).font = cell_font
+        ws2.cell(row=row2, column=2).alignment = Alignment(horizontal="center")
+        ws2.cell(row=row2, column=3, value=stats["total"]).font = cell_font
+        ws2.cell(row=row2, column=3).number_format = '#,##0'
+        ws2.cell(row=row2, column=4, value=stats["paid"]).font = Font(name="Arial", size=10, color="166534")
+        ws2.cell(row=row2, column=4).number_format = '#,##0'
+        ws2.cell(row=row2, column=4).fill = paid_fill
+        ws2.cell(row=row2, column=5, value=stats["unpaid"]).font = Font(name="Arial", size=10, color="92400E")
+        ws2.cell(row=row2, column=5).number_format = '#,##0'
+        if stats["unpaid"] > 0:
+            ws2.cell(row=row2, column=5).fill = unpaid_fill
+        for c in range(1, 6):
+            ws2.cell(row=row2, column=c).border = thin_border
+        row2 += 1
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    today_str = date_type.today().strftime("%Y-%m-%d")
+    filename = f"izvestaj_sesije_{today_str}.xlsx"
+    return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
+# ============================================
+# GET single sesija — MUST be AFTER export-excel
+# ============================================
 @app.get("/sesija/{sesija_id}/", response_model=None, tags=["Sesija"])
 async def get_sesija(sesija_id: int, database: Session = Depends(get_db)) -> Sesija:
     db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
     if db_sesija is None:
         raise HTTPException(status_code=404, detail="Sesija not found")
-
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
-    response_data = {
-        "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids],
-        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
-        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
-    }
-    return response_data
-
+    return {"sesija": db_sesija, "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids], "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
 
 @app.post("/sesija/", response_model=None, tags=["Sesija"])
 async def create_sesija(sesija_data: SesijaCreate, database: Session = Depends(get_db)) -> Sesija:
-    sesija_kwargs = dict(
-        cena=sesija_data.cena, status=sesija_data.status, pocetak=sesija_data.pocetak,
-        kraj=sesija_data.kraj)
+    sesija_kwargs = dict(cena=sesija_data.cena, status=sesija_data.status, pocetak=sesija_data.pocetak, kraj=sesija_data.kraj)
     if sesija_data.id is not None:
         sesija_kwargs["id"] = sesija_data.id
     db_sesija = Sesija(**sesija_kwargs)
-
     database.add(db_sesija)
     database.commit()
     database.refresh(db_sesija)
-
     if sesija_data.uplate:
         for cena_id in sesija_data.uplate:
             db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
             if not db_cena:
                 raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-        database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update(
-            {Cena.sesija_2_id: db_sesija.id}, synchronize_session=False
-        )
+        database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update({Cena.sesija_2_id: db_sesija.id}, synchronize_session=False)
         database.commit()
-
     if sesija_data.sesijaklijent_1:
         for sesijaklijent_id in sesija_data.sesijaklijent_1:
             db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
             if not db_sesijaklijent:
                 raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-        database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(sesija_data.sesijaklijent_1)).update(
-            {SesijaKlijent.sesija_id: db_sesija.id}, synchronize_session=False
-        )
+        database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(sesija_data.sesijaklijent_1)).update({SesijaKlijent.sesija_id: db_sesija.id}, synchronize_session=False)
         database.commit()
-
     if sesija_data.sesijagrupa_1:
         for sesijagrupa_id in sesija_data.sesijagrupa_1:
             db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
             if not db_sesijagrupa:
                 raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-        database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(sesija_data.sesijagrupa_1)).update(
-            {SesijaGrupa.sesija_1_id: db_sesija.id}, synchronize_session=False
-        )
+        database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(sesija_data.sesijagrupa_1)).update({SesijaGrupa.sesija_1_id: db_sesija.id}, synchronize_session=False)
         database.commit()
-
-    # Handle individual client session
     client_name = "Klijent"
     client_email = None
     is_group_session = False
-
     if sesija_data.klijent_id:
-        # Individual session - create SesijaKlijent link automatically
         klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
         if klijent:
             client_name = f"{klijent.ime} {klijent.prezime}"
             client_email = klijent.email
-
-            # Auto-create SesijaKlijent link
-            existing_sk = database.query(SesijaKlijent).filter(
-                SesijaKlijent.sesija_id == db_sesija.id,
-                SesijaKlijent.klijent_id == klijent.id
-            ).first()
+            existing_sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id, SesijaKlijent.klijent_id == klijent.id).first()
             if not existing_sk:
                 new_sk = SesijaKlijent(klijent_id=klijent.id, sesija_id=db_sesija.id)
                 database.add(new_sk)
                 database.commit()
     elif sesija_data.grupa_id:
-        # Group session - create SesijaGrupa link automatically
         is_group_session = True
         grupa = database.query(Grupa).filter(Grupa.id == sesija_data.grupa_id).first()
         if grupa:
-            # Auto-create SesijaGrupa link
-            existing_sg = database.query(SesijaGrupa).filter(
-                SesijaGrupa.sesija_1_id == db_sesija.id,
-                SesijaGrupa.grupa_id == grupa.id
-            ).first()
+            existing_sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id, SesijaGrupa.grupa_id == grupa.id).first()
             if not existing_sg:
                 new_sg = SesijaGrupa(grupa_id=grupa.id, sesija_1_id=db_sesija.id)
                 database.add(new_sg)
                 database.commit()
-
-            # Get all group members for email
             group_members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa.id).all()
             member_emails = []
             for gk in group_members:
                 member = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
                 if member:
-                    member_emails.append({
-                        "name": f"{member.ime} {member.prezime}",
-                        "email": member.email
-                    })
-
+                    member_emails.append({"name": f"{member.ime} {member.prezime}", "email": member.email})
             try:
-                send_session_email_to_group(
-                    action="created",
-                    grupa_naziv=grupa.naziv,
-                    pocetak=db_sesija.pocetak,
-                    kraj=db_sesija.kraj,
-                    cena=db_sesija.cena,
-                    client_emails=member_emails
-                )
+                send_session_email_to_group(action="created", grupa_naziv=grupa.naziv, pocetak=db_sesija.pocetak, kraj=db_sesija.kraj, cena=db_sesija.cena, client_emails=member_emails)
             except Exception as e:
                 logger.error(f"Failed to send group email: {e}")
     else:
-        # Fallback: check SesijaKlijent
         sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
         if sk and sk.klijent_id:
             klijent = database.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
             if klijent:
                 client_name = f"{klijent.ime} {klijent.prezime}"
                 client_email = klijent.email
-
-    # Send individual email (not for group sessions - those are handled above)
     if not is_group_session:
         try:
-            send_session_email(
-                action="created",
-                client_name=client_name,
-                pocetak=db_sesija.pocetak,
-                kraj=db_sesija.kraj,
-                cena=db_sesija.cena,
-                client_email=client_email
-            )
+            send_session_email(action="created", client_name=client_name, pocetak=db_sesija.pocetak, kraj=db_sesija.kraj, cena=db_sesija.cena, client_email=client_email)
         except Exception as e:
             logger.error(f"Failed to send email: {e}")
-
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
-    response_data = {
-        "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids],
-        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
-        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
-    }
-    return response_data
-
+    return {"sesija": db_sesija, "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids], "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
 
 @app.post("/sesija/bulk/", response_model=None, tags=["Sesija"])
 async def bulk_create_sesija(items: list[SesijaCreate], database: Session = Depends(get_db)) -> dict:
@@ -1544,13 +1439,7 @@ async def bulk_create_sesija(items: list[SesijaCreate], database: Session = Depe
     errors = []
     for idx, item_data in enumerate(items):
         try:
-            db_sesija = Sesija(
-                cena=item_data.cena,
-                status=item_data.status,
-                id=item_data.id,
-                pocetak=item_data.pocetak,
-                kraj=item_data.kraj
-            )
+            db_sesija = Sesija(cena=item_data.cena, status=item_data.status, id=item_data.id, pocetak=item_data.pocetak, kraj=item_data.kraj)
             database.add(db_sesija)
             database.flush()
             created_items.append(db_sesija.id)
@@ -1560,12 +1449,7 @@ async def bulk_create_sesija(items: list[SesijaCreate], database: Session = Depe
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
     database.commit()
-    return {
-        "created_count": len(created_items),
-        "created_ids": created_items,
-        "message": f"Successfully created {len(created_items)} Sesija entities"
-    }
-
+    return {"created_count": len(created_items), "created_ids": created_items, "message": f"Successfully created {len(created_items)} Sesija entities"}
 
 @app.delete("/sesija/bulk/", response_model=None, tags=["Sesija"])
 async def bulk_delete_sesija(ids: list[int], database: Session = Depends(get_db)) -> dict:
@@ -1579,97 +1463,103 @@ async def bulk_delete_sesija(ids: list[int], database: Session = Depends(get_db)
         else:
             not_found.append(item_id)
     database.commit()
-    return {
-        "deleted_count": deleted_count,
-        "not_found": not_found,
-        "message": f"Successfully deleted {deleted_count} Sesija entities"
-    }
+    return {"deleted_count": deleted_count, "not_found": not_found, "message": f"Successfully deleted {deleted_count} Sesija entities"}
 
+# ============================================
+# MARK PAID
+# ============================================
+@app.post("/sesija/{sesija_id}/mark-paid/", response_model=None, tags=["Sesija"])
+async def mark_sesija_paid(sesija_id: int, payment_data: dict = Body(...), database: Session = Depends(get_db)):
+    from datetime import date as date_type
+    db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
+    if db_sesija is None:
+        raise HTTPException(status_code=404, detail="Sesija not found")
+    existing_payment = database.query(Cena).filter(Cena.sesija_2_id == sesija_id, Cena.status == "placeno").first()
+    if existing_payment:
+        raise HTTPException(status_code=400, detail="Ova sesija je vec oznacena kao placena.")
+    nacin_placanja = payment_data.get("nacin_placanja", "gotovina")
+    datum_str = payment_data.get("datum_uplate")
+    if datum_str:
+        try:
+            datum_uplate = date_type.fromisoformat(datum_str)
+        except (ValueError, TypeError):
+            datum_uplate = date_type.today()
+    else:
+        datum_uplate = date_type.today()
+    sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == sesija_id).first()
+    sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == sesija_id).first()
+    if sk and sk.klijent_id:
+        db_cena = Cena(cena=db_sesija.cena, status="placeno", nacin_placanja=nacin_placanja, datum_uplate=datum_uplate, sesija_2_id=sesija_id, klijent_1_id=sk.klijent_id)
+        database.add(db_cena)
+    elif sg and sg.grupa_id:
+        group_members = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == sg.grupa_id).all()
+        if not group_members:
+            db_cena = Cena(cena=db_sesija.cena, status="placeno", nacin_placanja=nacin_placanja, datum_uplate=datum_uplate, sesija_2_id=sesija_id, klijent_1_id=None)
+            database.add(db_cena)
+        else:
+            for gk in group_members:
+                db_cena = Cena(cena=db_sesija.cena, status="placeno", nacin_placanja=nacin_placanja, datum_uplate=datum_uplate, sesija_2_id=sesija_id, klijent_1_id=gk.klijent_id)
+                database.add(db_cena)
+    else:
+        db_cena = Cena(cena=db_sesija.cena, status="placeno", nacin_placanja=nacin_placanja, datum_uplate=datum_uplate, sesija_2_id=sesija_id, klijent_1_id=None)
+        database.add(db_cena)
+    database.commit()
+    return {"message": "Sesija oznacena kao placena", "sesija_id": sesija_id}
 
 @app.put("/sesija/{sesija_id}/", response_model=None, tags=["Sesija"])
 async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Session = Depends(get_db)) -> Sesija:
     db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
     if db_sesija is None:
         raise HTTPException(status_code=404, detail="Sesija not found")
-
     setattr(db_sesija, 'cena', sesija_data.cena)
     setattr(db_sesija, 'status', sesija_data.status)
     setattr(db_sesija, 'id', sesija_data.id)
     setattr(db_sesija, 'pocetak', sesija_data.pocetak)
     setattr(db_sesija, 'kraj', sesija_data.kraj)
-
     if sesija_data.uplate is not None:
-        database.query(Cena).filter(Cena.sesija_2_id == db_sesija.id).update(
-            {Cena.sesija_2_id: None}, synchronize_session=False
-        )
+        database.query(Cena).filter(Cena.sesija_2_id == db_sesija.id).update({Cena.sesija_2_id: None}, synchronize_session=False)
         if sesija_data.uplate:
             for cena_id in sesija_data.uplate:
                 db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
                 if not db_cena:
                     raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-            database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update(
-                {Cena.sesija_2_id: db_sesija.id}, synchronize_session=False
-            )
-
+            database.query(Cena).filter(Cena.id.in_(sesija_data.uplate)).update({Cena.sesija_2_id: db_sesija.id}, synchronize_session=False)
     if sesija_data.sesijaklijent_1 is not None:
-        database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).update(
-            {SesijaKlijent.sesija_id: None}, synchronize_session=False
-        )
+        database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).update({SesijaKlijent.sesija_id: None}, synchronize_session=False)
         if sesija_data.sesijaklijent_1:
             for sesijaklijent_id in sesija_data.sesijaklijent_1:
                 db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
                 if not db_sesijaklijent:
                     raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-            database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(sesija_data.sesijaklijent_1)).update(
-                {SesijaKlijent.sesija_id: db_sesija.id}, synchronize_session=False
-            )
-
+            database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(sesija_data.sesijaklijent_1)).update({SesijaKlijent.sesija_id: db_sesija.id}, synchronize_session=False)
     if sesija_data.sesijagrupa_1 is not None:
-        database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).update(
-            {SesijaGrupa.sesija_1_id: None}, synchronize_session=False
-        )
+        database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).update({SesijaGrupa.sesija_1_id: None}, synchronize_session=False)
         if sesija_data.sesijagrupa_1:
             for sesijagrupa_id in sesija_data.sesijagrupa_1:
                 db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
                 if not db_sesijagrupa:
                     raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-            database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(sesija_data.sesijagrupa_1)).update(
-                {SesijaGrupa.sesija_1_id: db_sesija.id}, synchronize_session=False
-            )
-
-    # Handle klijent_id or grupa_id update for linking
+            database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(sesija_data.sesijagrupa_1)).update({SesijaGrupa.sesija_1_id: db_sesija.id}, synchronize_session=False)
     is_group_session = False
-
     if sesija_data.klijent_id:
-        # Clear any existing group link
         database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).delete()
-        # Clear existing client links
         database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).delete()
-
         klijent = database.query(Klijent).filter(Klijent.id == sesija_data.klijent_id).first()
         if klijent:
             new_sk = SesijaKlijent(klijent_id=klijent.id, sesija_id=db_sesija.id)
             database.add(new_sk)
-
     elif sesija_data.grupa_id:
         is_group_session = True
-        # Clear existing client links
         database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).delete()
-        # Clear existing group links
         database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).delete()
-
         grupa = database.query(Grupa).filter(Grupa.id == sesija_data.grupa_id).first()
         if grupa:
             new_sg = SesijaGrupa(grupa_id=grupa.id, sesija_1_id=db_sesija.id)
             database.add(new_sg)
-
     database.commit()
     database.refresh(db_sesija)
-
-    # Send email
     client_name = "Klijent"
     client_email = None
-
     if is_group_session and sesija_data.grupa_id:
         grupa = database.query(Grupa).filter(Grupa.id == sesija_data.grupa_id).first()
         if grupa:
@@ -1678,19 +1568,9 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
             for gk in group_members:
                 member = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
                 if member:
-                    member_emails.append({
-                        "name": f"{member.ime} {member.prezime}",
-                        "email": member.email
-                    })
+                    member_emails.append({"name": f"{member.ime} {member.prezime}", "email": member.email})
             try:
-                send_session_email_to_group(
-                    action="updated",
-                    grupa_naziv=grupa.naziv,
-                    pocetak=db_sesija.pocetak,
-                    kraj=db_sesija.kraj,
-                    cena=db_sesija.cena,
-                    client_emails=member_emails
-                )
+                send_session_email_to_group(action="updated", grupa_naziv=grupa.naziv, pocetak=db_sesija.pocetak, kraj=db_sesija.kraj, cena=db_sesija.cena, client_emails=member_emails)
             except Exception as e:
                 logger.error(f"Failed to send group email: {e}")
     else:
@@ -1706,41 +1586,23 @@ async def update_sesija(sesija_id: int, sesija_data: SesijaCreate, database: Ses
                 if klijent:
                     client_name = f"{klijent.ime} {klijent.prezime}"
                     client_email = klijent.email
-
         try:
-            send_session_email(
-                action="updated",
-                client_name=client_name,
-                pocetak=db_sesija.pocetak,
-                kraj=db_sesija.kraj,
-                cena=db_sesija.cena,
-                client_email=client_email
-            )
+            send_session_email(action="updated", client_name=client_name, pocetak=db_sesija.pocetak, kraj=db_sesija.kraj, cena=db_sesija.cena, client_email=client_email)
         except Exception as e:
             logger.error(f"Failed to send email: {e}")
-
     cena_ids = database.query(Cena.id).filter(Cena.sesija_2_id == db_sesija.id).all()
     sesijaklijent_1_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.sesija_id == db_sesija.id).all()
     sesijagrupa_1_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.sesija_1_id == db_sesija.id).all()
-    response_data = {
-        "sesija": db_sesija,
-        "cena_ids": [x[0] for x in cena_ids],
-        "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids],
-        "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]
-    }
-    return response_data
+    return {"sesija": db_sesija, "cena_ids": [x[0] for x in cena_ids], "sesijaklijent_1_ids": [x[0] for x in sesijaklijent_1_ids], "sesijagrupa_1_ids": [x[0] for x in sesijagrupa_1_ids]}
 
 @app.delete("/sesija/{sesija_id}/", response_model=None, tags=["Sesija"])
 async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
     db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
     if db_sesija is None:
         raise HTTPException(status_code=404, detail="Sesija not found")
-
     pocetak = db_sesija.pocetak
     kraj = db_sesija.kraj
     cena = db_sesija.cena
-
-    # Check if group session
     sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == db_sesija.id).first()
     if sg and sg.grupa_id:
         grupa = database.query(Grupa).filter(Grupa.id == sg.grupa_id).first()
@@ -1750,29 +1612,14 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
             for gk in group_members:
                 member = database.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
                 if member:
-                    member_emails.append({
-                        "name": f"{member.ime} {member.prezime}",
-                        "email": member.email
-                    })
-
+                    member_emails.append({"name": f"{member.ime} {member.prezime}", "email": member.email})
             database.delete(db_sesija)
             database.commit()
-
             try:
-                send_session_email_to_group(
-                    action="deleted",
-                    grupa_naziv=grupa.naziv,
-                    pocetak=pocetak,
-                    kraj=kraj,
-                    cena=cena,
-                    client_emails=member_emails
-                )
+                send_session_email_to_group(action="deleted", grupa_naziv=grupa.naziv, pocetak=pocetak, kraj=kraj, cena=cena, client_emails=member_emails)
             except Exception as e:
                 logger.error(f"Failed to send group email: {e}")
-
             return {"message": "Deleted", "id": sesija_id}
-
-    # Individual session
     client_name = "Klijent"
     client_email = None
     sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == db_sesija.id).first()
@@ -1781,470 +1628,14 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
         if klijent:
             client_name = f"{klijent.ime} {klijent.prezime}"
             client_email = klijent.email
-
     database.delete(db_sesija)
     database.commit()
-
     try:
-        send_session_email(
-            action="deleted",
-            client_name=client_name,
-            pocetak=pocetak,
-            kraj=kraj,
-            cena=cena,
-            client_email=client_email
-        )
+        send_session_email(action="deleted", client_name=client_name, pocetak=pocetak, kraj=kraj, cena=cena, client_email=client_email)
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
-
     return {"message": "Deleted", "id": sesija_id}
-"""
-=============================================================
-  BACKEND ADDITIONS — paste these into your main.py
-  (after the existing Sesija endpoints, before Grupa section)
-=============================================================
 
-Two new endpoints:
-  1. POST /sesija/{sesija_id}/mark-paid/  — marks a session as paid,
-     creates a Cena record, and returns updated session
-  2. GET  /sesija/export-excel/           — generates an Excel report
-     of all sessions with payment status
-
-Also requires adding 'placeno' field to the Sesija response
-in get_all_sesija (see instructions at bottom).
-"""
-
-# ============================================
-#  1. ADD TO sql_alchemy.py — no schema change needed!
-#     The 'placeno' field is computed from Cena records.
-# ============================================
-
-
-# ============================================
-#  2. ADD THESE IMPORTS at the top of main.py
-# ============================================
-# from fastapi.responses import StreamingResponse
-# import io
-# import openpyxl
-# from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-# from pydantic import BaseModel as PydanticBaseModel
-
-
-# ============================================
-#  3. ADD THIS PYDANTIC MODEL (near other models or in pydantic_classes.py)
-# ============================================
-
-# class MarkPaidRequest(PydanticBaseModel):
-#     nacin_placanja: str = "gotovina"
-#     datum_uplate: Optional[date] = None
-
-
-# ============================================
-#  4. ADD THESE ENDPOINTS to main.py
-# ============================================
-
-# --- Mark session as paid ---
-
-@app.post("/sesija/{sesija_id}/mark-paid/", response_model=None, tags=["Sesija"])
-async def mark_sesija_paid(
-    sesija_id: int,
-    payment_data: dict = Body(...),
-    database: Session = Depends(get_db),
-):
-    """
-    Mark a session as paid:
-    - Creates a Cena (payment) record linked to the session
-    - Links to the client (individual) or all group members
-    - Returns success message
-    """
-    from datetime import date as date_type
-
-    db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
-    if db_sesija is None:
-        raise HTTPException(status_code=404, detail="Sesija not found")
-
-    # Check if already paid
-    existing_payment = database.query(Cena).filter(
-        Cena.sesija_2_id == sesija_id,
-        Cena.status == "placeno",
-    ).first()
-    if existing_payment:
-        raise HTTPException(status_code=400, detail="Ova sesija je već označena kao plaćena.")
-
-    nacin_placanja = payment_data.get("nacin_placanja", "gotovina")
-    datum_str = payment_data.get("datum_uplate")
-    if datum_str:
-        try:
-            datum_uplate = date_type.fromisoformat(datum_str)
-        except (ValueError, TypeError):
-            datum_uplate = date_type.today()
-    else:
-        datum_uplate = date_type.today()
-
-    # Determine client(s)
-    sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == sesija_id).first()
-    sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == sesija_id).first()
-
-    if sk and sk.klijent_id:
-        # Individual session — one Cena record
-        db_cena = Cena(
-            cena=db_sesija.cena,
-            status="placeno",
-            nacin_placanja=nacin_placanja,
-            datum_uplate=datum_uplate,
-            sesija_2_id=sesija_id,
-            klijent_1_id=sk.klijent_id,
-        )
-        database.add(db_cena)
-    elif sg and sg.grupa_id:
-        # Group session — one Cena record per group member
-        group_members = database.query(GrupaKlijent).filter(
-            GrupaKlijent.grupa_id == sg.grupa_id
-        ).all()
-
-        if not group_members:
-            # No members, create a single record without client
-            db_cena = Cena(
-                cena=db_sesija.cena,
-                status="placeno",
-                nacin_placanja=nacin_placanja,
-                datum_uplate=datum_uplate,
-                sesija_2_id=sesija_id,
-                klijent_1_id=None,
-            )
-            database.add(db_cena)
-        else:
-            # Per-member price (split evenly) or full price per member — using full price
-            for gk in group_members:
-                db_cena = Cena(
-                    cena=db_sesija.cena,
-                    status="placeno",
-                    nacin_placanja=nacin_placanja,
-                    datum_uplate=datum_uplate,
-                    sesija_2_id=sesija_id,
-                    klijent_1_id=gk.klijent_id,
-                )
-                database.add(db_cena)
-    else:
-        # Fallback — no client link
-        db_cena = Cena(
-            cena=db_sesija.cena,
-            status="placeno",
-            nacin_placanja=nacin_placanja,
-            datum_uplate=datum_uplate,
-            sesija_2_id=sesija_id,
-            klijent_1_id=None,
-        )
-        database.add(db_cena)
-
-    database.commit()
-    return {"message": "Sesija označena kao plaćena", "sesija_id": sesija_id}
-
-
-# --- Excel export ---
-
-@app.get("/sesija/export-excel/", response_model=None, tags=["Sesija"])
-def export_sesija_excel(database: Session = Depends(get_db)):
-    """
-    Export all sessions as an Excel report with:
-    - Session details (client/group, date, time, price, status)
-    - Payment status (Plaćeno / Nije plaćeno)
-    - Payment method and date
-    - Summary statistics at the bottom
-    """
-    import io
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from fastapi.responses import StreamingResponse
-    from datetime import date as date_type
-
-    # Fetch all data
-    sesija_list = database.query(Sesija).all()
-    all_sk = database.query(SesijaKlijent).all()
-    all_sg = database.query(SesijaGrupa).all()
-    all_klijenti = database.query(Klijent).all()
-    all_grupe = database.query(Grupa).all()
-    all_cene = database.query(Cena).all()
-
-    klijent_map = {k.id: k for k in all_klijenti}
-    grupa_map = {g.id: g for g in all_grupe}
-    sk_map = {sk.sesija_id: sk.klijent_id for sk in all_sk}
-    sg_map = {sg.sesija_1_id: sg.grupa_id for sg in all_sg}
-
-    # Payment lookup: sesija_id -> list of Cena records with status "placeno"
-    payment_map: dict = {}
-    for c in all_cene:
-        if c.status == "placeno" and c.sesija_2_id:
-            if c.sesija_2_id not in payment_map:
-                payment_map[c.sesija_2_id] = []
-            payment_map[c.sesija_2_id].append(c)
-
-    # Create workbook
-    wb = openpyxl.Workbook()
-
-    # ===== SHEET 1: All sessions =====
-    ws = wb.active
-    ws.title = "Sesije"
-
-    # Styles
-    header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
-    header_fill = PatternFill("solid", fgColor="1E293B")
-    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    cell_font = Font(name="Arial", size=10)
-    paid_fill = PatternFill("solid", fgColor="DCFCE7")
-    unpaid_fill = PatternFill("solid", fgColor="FEF3C7")
-    total_font = Font(name="Arial", bold=True, size=11)
-    total_fill = PatternFill("solid", fgColor="EEF2FF")
-    thin_border = Border(
-        left=Side(style="thin", color="E2E8F0"),
-        right=Side(style="thin", color="E2E8F0"),
-        top=Side(style="thin", color="E2E8F0"),
-        bottom=Side(style="thin", color="E2E8F0"),
-    )
-
-    # Title row
-    ws.merge_cells("A1:H1")
-    title_cell = ws["A1"]
-    title_cell.value = f"Izveštaj sesija — {date_type.today().strftime('%d.%m.%Y')}"
-    title_cell.font = Font(name="Arial", bold=True, size=14, color="1E293B")
-    title_cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 35
-
-    # Headers
-    headers = [
-        "R.br.", "Klijent / Grupa", "Tip", "Datum", "Početak", "Kraj",
-        "Cena (RSD)", "Status", "Plaćeno", "Način plaćanja", "Datum uplate"
-    ]
-    for col_idx, header in enumerate(headers, 1):
-        cell = ws.cell(row=3, column=col_idx, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_align
-        cell.border = thin_border
-
-    ws.row_dimensions[3].height = 28
-
-    # Column widths
-    col_widths = [6, 25, 14, 14, 10, 10, 14, 14, 12, 16, 14]
-    for i, w in enumerate(col_widths, 1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
-
-    # Data rows
-    row_num = 4
-    total_cena = 0
-    total_placeno = 0
-    total_neplaceno = 0
-
-    for idx, s in enumerate(sesija_list, 1):
-        klijent_id = sk_map.get(s.id)
-        grupa_id = sg_map.get(s.id)
-
-        if klijent_id:
-            klijent = klijent_map.get(klijent_id)
-            ime = f"{klijent.ime} {klijent.prezime}" if klijent else "—"
-            tip = "Individualna"
-        elif grupa_id:
-            grupa = grupa_map.get(grupa_id)
-            ime = f"{grupa.naziv}" if grupa else "—"
-            tip = "Grupna"
-        else:
-            ime = "—"
-            tip = "—"
-
-        payments = payment_map.get(s.id, [])
-        is_paid = len(payments) > 0
-
-        nacin = payments[0].nacin_placanja if payments else "—"
-        datum_uplate_val = payments[0].datum_uplate.strftime("%d.%m.%Y") if payments and payments[0].datum_uplate else "—"
-
-        total_cena += s.cena or 0
-        if is_paid:
-            total_placeno += s.cena or 0
-        else:
-            total_neplaceno += s.cena or 0
-
-        row_data = [
-            idx,
-            ime,
-            tip,
-            s.pocetak.strftime("%d.%m.%Y") if s.pocetak else "—",
-            s.pocetak.strftime("%H:%M") if s.pocetak else "—",
-            s.kraj.strftime("%H:%M") if s.kraj else "—",
-            s.cena,
-            s.status.capitalize() if s.status else "—",
-            "Da ✓" if is_paid else "Ne",
-            nacin.capitalize() if nacin != "—" else "—",
-            datum_uplate_val,
-        ]
-
-        for col_idx, value in enumerate(row_data, 1):
-            cell = ws.cell(row=row_num, column=col_idx, value=value)
-            cell.font = cell_font
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal="center" if col_idx != 2 else "left", vertical="center")
-
-        # Color paid/unpaid rows
-        payment_cell = ws.cell(row=row_num, column=9)
-        if is_paid:
-            payment_cell.fill = paid_fill
-            payment_cell.font = Font(name="Arial", size=10, bold=True, color="166534")
-        else:
-            payment_cell.fill = unpaid_fill
-            payment_cell.font = Font(name="Arial", size=10, bold=True, color="92400E")
-
-        # Light green background for entire paid row
-        if is_paid:
-            for col_idx in range(1, len(headers) + 1):
-                if col_idx != 9:
-                    ws.cell(row=row_num, column=col_idx).fill = PatternFill("solid", fgColor="F0FDF4")
-
-        row_num += 1
-
-    # Summary section
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:C{row_num}")
-    summary_cell = ws.cell(row=row_num, column=1, value="UKUPNO")
-    summary_cell.font = total_font
-    summary_cell.fill = total_fill
-    summary_cell.alignment = Alignment(horizontal="right")
-
-    total_cell = ws.cell(row=row_num, column=7, value=total_cena)
-    total_cell.font = total_font
-    total_cell.fill = total_fill
-    total_cell.number_format = '#,##0'
-
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:C{row_num}")
-    ws.cell(row=row_num, column=1, value="Ukupno plaćeno").font = Font(name="Arial", bold=True, size=10, color="166534")
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    paid_total_cell = ws.cell(row=row_num, column=7, value=total_placeno)
-    paid_total_cell.font = Font(name="Arial", bold=True, size=10, color="166534")
-    paid_total_cell.fill = paid_fill
-    paid_total_cell.number_format = '#,##0'
-
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:C{row_num}")
-    ws.cell(row=row_num, column=1, value="Ukupno neplaćeno").font = Font(name="Arial", bold=True, size=10, color="92400E")
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    unpaid_total_cell = ws.cell(row=row_num, column=7, value=total_neplaceno)
-    unpaid_total_cell.font = Font(name="Arial", bold=True, size=10, color="92400E")
-    unpaid_total_cell.fill = unpaid_fill
-    unpaid_total_cell.number_format = '#,##0'
-
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:C{row_num}")
-    ws.cell(row=row_num, column=1, value="Broj sesija").font = Font(name="Arial", size=10)
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    ws.cell(row=row_num, column=7, value=len(sesija_list)).font = Font(name="Arial", bold=True, size=10)
-
-    # ===== SHEET 2: Per-client summary =====
-    ws2 = wb.create_sheet("Po klijentu")
-
-    ws2.merge_cells("A1:E1")
-    ws2["A1"].value = "Statistika po klijentu"
-    ws2["A1"].font = Font(name="Arial", bold=True, size=14, color="1E293B")
-    ws2["A1"].alignment = Alignment(horizontal="center")
-    ws2.row_dimensions[1].height = 35
-
-    client_headers = ["Klijent", "Br. sesija", "Ukupno (RSD)", "Plaćeno (RSD)", "Neplaćeno (RSD)"]
-    for col_idx, h in enumerate(client_headers, 1):
-        cell = ws2.cell(row=3, column=col_idx, value=h)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_align
-        cell.border = thin_border
-
-    ws2.column_dimensions["A"].width = 28
-    ws2.column_dimensions["B"].width = 12
-    ws2.column_dimensions["C"].width = 16
-    ws2.column_dimensions["D"].width = 16
-    ws2.column_dimensions["E"].width = 16
-
-    # Aggregate per client
-    client_stats: dict = {}
-    for s in sesija_list:
-        klijent_id = sk_map.get(s.id)
-        grupa_id = sg_map.get(s.id)
-
-        if klijent_id:
-            klijent = klijent_map.get(klijent_id)
-            key = f"{klijent.ime} {klijent.prezime}" if klijent else f"Klijent #{klijent_id}"
-        elif grupa_id:
-            grupa = grupa_map.get(grupa_id)
-            key = f"[Grupa] {grupa.naziv}" if grupa else f"Grupa #{grupa_id}"
-        else:
-            key = "Nepoznato"
-
-        if key not in client_stats:
-            client_stats[key] = {"sessions": 0, "total": 0, "paid": 0, "unpaid": 0}
-
-        client_stats[key]["sessions"] += 1
-        client_stats[key]["total"] += s.cena or 0
-
-        is_paid = s.id in payment_map
-        if is_paid:
-            client_stats[key]["paid"] += s.cena or 0
-        else:
-            client_stats[key]["unpaid"] += s.cena or 0
-
-    row2 = 4
-    for name, stats in sorted(client_stats.items()):
-        ws2.cell(row=row2, column=1, value=name).font = cell_font
-        ws2.cell(row=row2, column=2, value=stats["sessions"]).font = cell_font
-        ws2.cell(row=row2, column=2).alignment = Alignment(horizontal="center")
-        ws2.cell(row=row2, column=3, value=stats["total"]).font = cell_font
-        ws2.cell(row=row2, column=3).number_format = '#,##0'
-        ws2.cell(row=row2, column=4, value=stats["paid"]).font = Font(name="Arial", size=10, color="166534")
-        ws2.cell(row=row2, column=4).number_format = '#,##0'
-        ws2.cell(row=row2, column=4).fill = paid_fill
-        ws2.cell(row=row2, column=5, value=stats["unpaid"]).font = Font(name="Arial", size=10, color="92400E")
-        ws2.cell(row=row2, column=5).number_format = '#,##0'
-        if stats["unpaid"] > 0:
-            ws2.cell(row=row2, column=5).fill = unpaid_fill
-
-        for c in range(1, 6):
-            ws2.cell(row=row2, column=c).border = thin_border
-
-        row2 += 1
-
-    # Save to buffer
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-
-    today_str = date_type.today().strftime("%Y-%m-%d")
-    filename = f"izvestaj_sesije_{today_str}.xlsx"
-
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-# ============================================
-#  5. MODIFY get_all_sesija to include 'placeno' field
-#     In the non-detailed branch, after building result list,
-#     add this code before `return result`:
-# ============================================
-
-"""
-In the get_all_sesija function, in the `else` (non-detailed) branch,
-you need to also load payment data. Add this BEFORE the `return result`:
-
-    # Check payment status for each session
-    all_cene = database.query(Cena).filter(Cena.status == "placeno").all()
-    paid_sesija_ids = set()
-    for c in all_cene:
-        if c.sesija_2_id:
-            paid_sesija_ids.add(c.sesija_2_id)
-
-Then inside the `for s in sesija_list:` loop, add:
-
-    item['placeno'] = s.id in paid_sesija_ids
-
-This will add a boolean 'placeno' field to each session in the API response.
-"""
 
 ############################################
 #
@@ -2255,24 +1646,19 @@ This will add a boolean 'placeno' field to each session in the API response.
 @app.get("/grupa/", response_model=None, tags=["Grupa"])
 def get_all_grupa(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
-
     if detailed:
         query = database.query(Grupa)
         grupa_list = query.all()
-
         result = []
         for grupa_item in grupa_list:
             item_dict = grupa_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             sesijagrupa_list = database.query(SesijaGrupa).filter(SesijaGrupa.grupa_id == grupa_item.id).all()
             item_dict['sesijagrupa'] = []
             for sesijagrupa_obj in sesijagrupa_list:
                 sesijagrupa_dict = sesijagrupa_obj.__dict__.copy()
                 sesijagrupa_dict.pop('_sa_instance_state', None)
                 item_dict['sesijagrupa'].append(sesijagrupa_dict)
-
-            # Add group members
             gk_list = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_item.id).all()
             item_dict['clanovi'] = []
             for gk in gk_list:
@@ -2281,11 +1667,9 @@ def get_all_grupa(detailed: bool = False, database: Session = Depends(get_db)) -
                     klijent_dict = klijent.__dict__.copy()
                     klijent_dict.pop('_sa_instance_state', None)
                     item_dict['clanovi'].append(klijent_dict)
-
             result.append(item_dict)
         return result
     else:
-        # Add member count for list display
         grupa_list = database.query(Grupa).all()
         result = []
         for g in grupa_list:
@@ -2293,8 +1677,6 @@ def get_all_grupa(detailed: bool = False, database: Session = Depends(get_db)) -
             item.pop('_sa_instance_state', None)
             member_count = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == g.id).count()
             item['broj_clanova'] = member_count
-
-            # Get member names for display
             gk_list = database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == g.id).all()
             member_names = []
             for gk in gk_list:
@@ -2302,96 +1684,53 @@ def get_all_grupa(detailed: bool = False, database: Session = Depends(get_db)) -
                 if klijent:
                     member_names.append(f"{klijent.ime} {klijent.prezime}")
             item['clanovi_imena'] = ", ".join(member_names) if member_names else "—"
-
             result.append(item)
         return result
 
-
 @app.get("/grupa/count/", response_model=None, tags=["Grupa"])
 def get_count_grupa(database: Session = Depends(get_db)) -> dict:
-    count = database.query(Grupa).count()
-    return {"count": count}
-
+    return {"count": database.query(Grupa).count()}
 
 @app.get("/grupa/paginated/", response_model=None, tags=["Grupa"])
 def get_paginated_grupa(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
     total = database.query(Grupa).count()
     grupa_list = database.query(Grupa).offset(skip).limit(limit).all()
     if not detailed:
-        return {
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-            "data": grupa_list
-        }
-
+        return {"total": total, "skip": skip, "limit": limit, "data": grupa_list}
     result = []
     for grupa_item in grupa_list:
         sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == grupa_item.id).all()
-        item_data = {
-            "grupa": grupa_item,
-            "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]
-        }
+        item_data = {"grupa": grupa_item, "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids]}
         result.append(item_data)
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": result
-    }
-
+    return {"total": total, "skip": skip, "limit": limit, "data": result}
 
 @app.get("/grupa/search/", response_model=None, tags=["Grupa"])
 def search_grupa(database: Session = Depends(get_db)) -> list:
-    query = database.query(Grupa)
-    results = query.all()
-    return results
-
+    return database.query(Grupa).all()
 
 @app.get("/grupa/{grupa_id}/", response_model=None, tags=["Grupa"])
 async def get_grupa(grupa_id: int, database: Session = Depends(get_db)) -> Grupa:
     db_grupa = database.query(Grupa).filter(Grupa.id == grupa_id).first()
     if db_grupa is None:
         raise HTTPException(status_code=404, detail="Grupa not found")
-
     sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == db_grupa.id).all()
-
-    # Get member IDs
     member_ids = database.query(GrupaKlijent.klijent_id).filter(GrupaKlijent.grupa_id == db_grupa.id).all()
-
-    response_data = {
-        "grupa": db_grupa,
-        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids],
-        "member_ids": [x[0] for x in member_ids]
-    }
-    return response_data
-
+    return {"grupa": db_grupa, "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids], "member_ids": [x[0] for x in member_ids]}
 
 @app.post("/grupa/", response_model=None, tags=["Grupa"])
 async def create_grupa(grupa_data: GrupaCreate, database: Session = Depends(get_db)) -> Grupa:
-    grupa_kwargs = dict(
-        opis=grupa_data.opis,
-        cena=grupa_data.cena,
-        naziv=grupa_data.naziv
-    )
-
+    grupa_kwargs = dict(opis=grupa_data.opis, cena=grupa_data.cena, naziv=grupa_data.naziv)
     db_grupa = Grupa(**grupa_kwargs)
-
     database.add(db_grupa)
     database.commit()
     database.refresh(db_grupa)
-
     if grupa_data.sesijagrupa:
         for sesijagrupa_id in grupa_data.sesijagrupa:
             db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
             if not db_sesijagrupa:
                 raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-        database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(grupa_data.sesijagrupa)).update(
-            {SesijaGrupa.grupa_id: db_grupa.id}, synchronize_session=False
-        )
+        database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(grupa_data.sesijagrupa)).update({SesijaGrupa.grupa_id: db_grupa.id}, synchronize_session=False)
         database.commit()
-
-    # Add group members if provided
     if grupa_data.clanovi:
         for klijent_id in grupa_data.clanovi:
             db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
@@ -2400,16 +1739,9 @@ async def create_grupa(grupa_data: GrupaCreate, database: Session = Depends(get_
             db_gk = GrupaKlijent(grupa_id=db_grupa.id, klijent_id=klijent_id)
             database.add(db_gk)
         database.commit()
-
     sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == db_grupa.id).all()
     member_ids = database.query(GrupaKlijent.klijent_id).filter(GrupaKlijent.grupa_id == db_grupa.id).all()
-    response_data = {
-        "grupa": db_grupa,
-        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids],
-        "member_ids": [x[0] for x in member_ids]
-    }
-    return response_data
-
+    return {"grupa": db_grupa, "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids], "member_ids": [x[0] for x in member_ids]}
 
 @app.post("/grupa/bulk/", response_model=None, tags=["Grupa"])
 async def bulk_create_grupa(items: list[GrupaCreate], database: Session = Depends(get_db)) -> dict:
@@ -2417,12 +1749,7 @@ async def bulk_create_grupa(items: list[GrupaCreate], database: Session = Depend
     errors = []
     for idx, item_data in enumerate(items):
         try:
-            db_grupa = Grupa(
-                opis=item_data.opis,
-                id=item_data.id,
-                cena=item_data.cena,
-                naziv=item_data.naziv
-            )
+            db_grupa = Grupa(opis=item_data.opis, id=item_data.id, cena=item_data.cena, naziv=item_data.naziv)
             database.add(db_grupa)
             database.flush()
             created_items.append(db_grupa.id)
@@ -2432,12 +1759,7 @@ async def bulk_create_grupa(items: list[GrupaCreate], database: Session = Depend
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
     database.commit()
-    return {
-        "created_count": len(created_items),
-        "created_ids": created_items,
-        "message": f"Successfully created {len(created_items)} Grupa entities"
-    }
-
+    return {"created_count": len(created_items), "created_ids": created_items, "message": f"Successfully created {len(created_items)} Grupa entities"}
 
 @app.delete("/grupa/bulk/", response_model=None, tags=["Grupa"])
 async def bulk_delete_grupa(ids: list[int], database: Session = Depends(get_db)) -> dict:
@@ -2451,36 +1773,24 @@ async def bulk_delete_grupa(ids: list[int], database: Session = Depends(get_db))
         else:
             not_found.append(item_id)
     database.commit()
-    return {
-        "deleted_count": deleted_count,
-        "not_found": not_found,
-        "message": f"Successfully deleted {deleted_count} Grupa entities"
-    }
+    return {"deleted_count": deleted_count, "not_found": not_found, "message": f"Successfully deleted {deleted_count} Grupa entities"}
 
 @app.put("/grupa/{grupa_id}/", response_model=None, tags=["Grupa"])
 async def update_grupa(grupa_id: int, grupa_data: GrupaCreate, database: Session = Depends(get_db)) -> Grupa:
     db_grupa = database.query(Grupa).filter(Grupa.id == grupa_id).first()
     if db_grupa is None:
         raise HTTPException(status_code=404, detail="Grupa not found")
-
     setattr(db_grupa, 'opis', grupa_data.opis)
     setattr(db_grupa, 'cena', grupa_data.cena)
     setattr(db_grupa, 'naziv', grupa_data.naziv)
-
     if grupa_data.sesijagrupa is not None:
-        database.query(SesijaGrupa).filter(SesijaGrupa.grupa_id == db_grupa.id).update(
-            {SesijaGrupa.grupa_id: None}, synchronize_session=False
-        )
+        database.query(SesijaGrupa).filter(SesijaGrupa.grupa_id == db_grupa.id).update({SesijaGrupa.grupa_id: None}, synchronize_session=False)
         if grupa_data.sesijagrupa:
             for sesijagrupa_id in grupa_data.sesijagrupa:
                 db_sesijagrupa = database.query(SesijaGrupa).filter(SesijaGrupa.id == sesijagrupa_id).first()
                 if not db_sesijagrupa:
                     raise HTTPException(status_code=400, detail=f"SesijaGrupa with id {sesijagrupa_id} not found")
-            database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(grupa_data.sesijagrupa)).update(
-                {SesijaGrupa.grupa_id: db_grupa.id}, synchronize_session=False
-            )
-
-    # Sync group members
+            database.query(SesijaGrupa).filter(SesijaGrupa.id.in_(grupa_data.sesijagrupa)).update({SesijaGrupa.grupa_id: db_grupa.id}, synchronize_session=False)
     if grupa_data.clanovi is not None:
         database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == db_grupa.id).delete()
         for klijent_id in grupa_data.clanovi:
@@ -2489,26 +1799,17 @@ async def update_grupa(grupa_id: int, grupa_data: GrupaCreate, database: Session
                 raise HTTPException(status_code=400, detail=f"Klijent with id {klijent_id} not found")
             db_gk = GrupaKlijent(grupa_id=db_grupa.id, klijent_id=klijent_id)
             database.add(db_gk)
-
     database.commit()
     database.refresh(db_grupa)
-
     sesijagrupa_ids = database.query(SesijaGrupa.id).filter(SesijaGrupa.grupa_id == db_grupa.id).all()
     member_ids = database.query(GrupaKlijent.klijent_id).filter(GrupaKlijent.grupa_id == db_grupa.id).all()
-    response_data = {
-        "grupa": db_grupa,
-        "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids],
-        "member_ids": [x[0] for x in member_ids]
-    }
-    return response_data
-
+    return {"grupa": db_grupa, "sesijagrupa_ids": [x[0] for x in sesijagrupa_ids], "member_ids": [x[0] for x in member_ids]}
 
 @app.delete("/grupa/{grupa_id}/", response_model=None, tags=["Grupa"])
 async def delete_grupa(grupa_id: int, database: Session = Depends(get_db)):
     db_grupa = database.query(Grupa).filter(Grupa.id == grupa_id).first()
     if db_grupa is None:
         raise HTTPException(status_code=404, detail="Grupa not found")
-    # Delete group members first
     database.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa_id).delete()
     database.delete(db_grupa)
     database.commit()
@@ -2524,16 +1825,13 @@ async def delete_grupa(grupa_id: int, database: Session = Depends(get_db)):
 @app.get("/klijent/", response_model=None, tags=["Klijent"])
 def get_all_klijent(detailed: bool = False, database: Session = Depends(get_db)) -> list:
     from sqlalchemy.orm import joinedload
-
     if detailed:
         query = database.query(Klijent)
         klijent_list = query.all()
-
         result = []
         for klijent_item in klijent_list:
             item_dict = klijent_item.__dict__.copy()
             item_dict.pop('_sa_instance_state', None)
-
             sesijaklijent_list = database.query(SesijaKlijent).filter(SesijaKlijent.klijent_id == klijent_item.id).all()
             item_dict['sesijaklijent'] = []
             for sesijaklijent_obj in sesijaklijent_list:
@@ -2546,115 +1844,66 @@ def get_all_klijent(detailed: bool = False, database: Session = Depends(get_db))
                 cena_dict = cena_obj.__dict__.copy()
                 cena_dict.pop('_sa_instance_state', None)
                 item_dict['cena_1'].append(cena_dict)
-
             result.append(item_dict)
         return result
     else:
         return database.query(Klijent).all()
 
-
 @app.get("/klijent/count/", response_model=None, tags=["Klijent"])
 def get_count_klijent(database: Session = Depends(get_db)) -> dict:
-    count = database.query(Klijent).count()
-    return {"count": count}
-
+    return {"count": database.query(Klijent).count()}
 
 @app.get("/klijent/paginated/", response_model=None, tags=["Klijent"])
 def get_paginated_klijent(skip: int = 0, limit: int = 100, detailed: bool = False, database: Session = Depends(get_db)) -> dict:
     total = database.query(Klijent).count()
     klijent_list = database.query(Klijent).offset(skip).limit(limit).all()
     if not detailed:
-        return {
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-            "data": klijent_list
-        }
-
+        return {"total": total, "skip": skip, "limit": limit, "data": klijent_list}
     result = []
     for klijent_item in klijent_list:
         sesijaklijent_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.klijent_id == klijent_item.id).all()
         cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == klijent_item.id).all()
-        item_data = {
-            "klijent": klijent_item,
-            "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
-            "cena_1_ids": [x[0] for x in cena_1_ids]
-        }
+        item_data = {"klijent": klijent_item, "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids], "cena_1_ids": [x[0] for x in cena_1_ids]}
         result.append(item_data)
-    return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": result
-    }
-
+    return {"total": total, "skip": skip, "limit": limit, "data": result}
 
 @app.get("/klijent/search/", response_model=None, tags=["Klijent"])
 def search_klijent(database: Session = Depends(get_db)) -> list:
-    query = database.query(Klijent)
-    results = query.all()
-    return results
-
+    return database.query(Klijent).all()
 
 @app.get("/klijent/{klijent_id}/", response_model=None, tags=["Klijent"])
 async def get_klijent(klijent_id: int, database: Session = Depends(get_db)) -> Klijent:
     db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
     if db_klijent is None:
         raise HTTPException(status_code=404, detail="Klijent not found")
-
     sesijaklijent_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.klijent_id == db_klijent.id).all()
     cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == db_klijent.id).all()
-    response_data = {
-        "klijent": db_klijent,
-        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
-        "cena_1_ids": [x[0] for x in cena_1_ids]
-    }
-    return response_data
-
+    return {"klijent": db_klijent, "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids], "cena_1_ids": [x[0] for x in cena_1_ids]}
 
 @app.post("/klijent/", response_model=None, tags=["Klijent"])
 async def create_klijent(klijent_data: KlijentCreate, database: Session = Depends(get_db)) -> Klijent:
-    klijent_kwargs = dict(
-        ime=klijent_data.ime,
-        email=klijent_data.email,
-        prezime=klijent_data.prezime,
-        broj_telefona=klijent_data.broj_telefona
-    )
-
+    klijent_kwargs = dict(ime=klijent_data.ime, email=klijent_data.email, prezime=klijent_data.prezime, broj_telefona=klijent_data.broj_telefona)
     db_klijent = Klijent(**klijent_kwargs)
-
     database.add(db_klijent)
     database.commit()
     database.refresh(db_klijent)
-
     if klijent_data.sesijaklijent:
         for sesijaklijent_id in klijent_data.sesijaklijent:
             db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
             if not db_sesijaklijent:
                 raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-        database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(klijent_data.sesijaklijent)).update(
-            {SesijaKlijent.klijent_id: db_klijent.id}, synchronize_session=False
-        )
+        database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(klijent_data.sesijaklijent)).update({SesijaKlijent.klijent_id: db_klijent.id}, synchronize_session=False)
         database.commit()
     if klijent_data.cena_1:
         for cena_id in klijent_data.cena_1:
             db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
             if not db_cena:
                 raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-        database.query(Cena).filter(Cena.id.in_(klijent_data.cena_1)).update(
-            {Cena.klijent_1_id: db_klijent.id}, synchronize_session=False
-        )
+        database.query(Cena).filter(Cena.id.in_(klijent_data.cena_1)).update({Cena.klijent_1_id: db_klijent.id}, synchronize_session=False)
         database.commit()
-
     sesijaklijent_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.klijent_id == db_klijent.id).all()
     cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == db_klijent.id).all()
-    response_data = {
-        "klijent": db_klijent,
-        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
-        "cena_1_ids": [x[0] for x in cena_1_ids]
-    }
-    return response_data
-
+    return {"klijent": db_klijent, "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids], "cena_1_ids": [x[0] for x in cena_1_ids]}
 
 @app.post("/klijent/bulk/", response_model=None, tags=["Klijent"])
 async def bulk_create_klijent(items: list[KlijentCreate], database: Session = Depends(get_db)) -> dict:
@@ -2662,13 +1911,7 @@ async def bulk_create_klijent(items: list[KlijentCreate], database: Session = De
     errors = []
     for idx, item_data in enumerate(items):
         try:
-            db_klijent = Klijent(
-                ime=item_data.ime,
-                email=item_data.email,
-                id=item_data.id,
-                prezime=item_data.prezime,
-                broj_telefona=item_data.broj_telefona
-            )
+            db_klijent = Klijent(ime=item_data.ime, email=item_data.email, id=item_data.id, prezime=item_data.prezime, broj_telefona=item_data.broj_telefona)
             database.add(db_klijent)
             database.flush()
             created_items.append(db_klijent.id)
@@ -2678,12 +1921,7 @@ async def bulk_create_klijent(items: list[KlijentCreate], database: Session = De
         database.rollback()
         raise HTTPException(status_code=400, detail={"message": "Bulk creation failed", "errors": errors})
     database.commit()
-    return {
-        "created_count": len(created_items),
-        "created_ids": created_items,
-        "message": f"Successfully created {len(created_items)} Klijent entities"
-    }
-
+    return {"created_count": len(created_items), "created_ids": created_items, "message": f"Successfully created {len(created_items)} Klijent entities"}
 
 @app.delete("/klijent/bulk/", response_model=None, tags=["Klijent"])
 async def bulk_delete_klijent(ids: list[int], database: Session = Depends(get_db)) -> dict:
@@ -2697,66 +1935,44 @@ async def bulk_delete_klijent(ids: list[int], database: Session = Depends(get_db
         else:
             not_found.append(item_id)
     database.commit()
-    return {
-        "deleted_count": deleted_count,
-        "not_found": not_found,
-        "message": f"Successfully deleted {deleted_count} Klijent entities"
-    }
+    return {"deleted_count": deleted_count, "not_found": not_found, "message": f"Successfully deleted {deleted_count} Klijent entities"}
 
 @app.put("/klijent/{klijent_id}/", response_model=None, tags=["Klijent"])
 async def update_klijent(klijent_id: int, klijent_data: KlijentCreate, database: Session = Depends(get_db)) -> Klijent:
     db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
     if db_klijent is None:
         raise HTTPException(status_code=404, detail="Klijent not found")
-
     setattr(db_klijent, 'ime', klijent_data.ime)
     setattr(db_klijent, 'email', klijent_data.email)
     setattr(db_klijent, 'prezime', klijent_data.prezime)
     setattr(db_klijent, 'broj_telefona', klijent_data.broj_telefona)
-
     if klijent_data.sesijaklijent is not None:
-        database.query(SesijaKlijent).filter(SesijaKlijent.klijent_id == db_klijent.id).update(
-            {SesijaKlijent.klijent_id: None}, synchronize_session=False
-        )
+        database.query(SesijaKlijent).filter(SesijaKlijent.klijent_id == db_klijent.id).update({SesijaKlijent.klijent_id: None}, synchronize_session=False)
         if klijent_data.sesijaklijent:
             for sesijaklijent_id in klijent_data.sesijaklijent:
                 db_sesijaklijent = database.query(SesijaKlijent).filter(SesijaKlijent.id == sesijaklijent_id).first()
                 if not db_sesijaklijent:
                     raise HTTPException(status_code=400, detail=f"SesijaKlijent with id {sesijaklijent_id} not found")
-            database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(klijent_data.sesijaklijent)).update(
-                {SesijaKlijent.klijent_id: db_klijent.id}, synchronize_session=False
-            )
+            database.query(SesijaKlijent).filter(SesijaKlijent.id.in_(klijent_data.sesijaklijent)).update({SesijaKlijent.klijent_id: db_klijent.id}, synchronize_session=False)
     if klijent_data.cena_1 is not None:
-        database.query(Cena).filter(Cena.klijent_1_id == db_klijent.id).update(
-            {Cena.klijent_1_id: None}, synchronize_session=False
-        )
+        database.query(Cena).filter(Cena.klijent_1_id == db_klijent.id).update({Cena.klijent_1_id: None}, synchronize_session=False)
         if klijent_data.cena_1:
             for cena_id in klijent_data.cena_1:
                 db_cena = database.query(Cena).filter(Cena.id == cena_id).first()
                 if not db_cena:
                     raise HTTPException(status_code=400, detail=f"Cena with id {cena_id} not found")
-            database.query(Cena).filter(Cena.id.in_(klijent_data.cena_1)).update(
-                {Cena.klijent_1_id: db_klijent.id}, synchronize_session=False
-            )
+            database.query(Cena).filter(Cena.id.in_(klijent_data.cena_1)).update({Cena.klijent_1_id: db_klijent.id}, synchronize_session=False)
     database.commit()
     database.refresh(db_klijent)
-
     sesijaklijent_ids = database.query(SesijaKlijent.id).filter(SesijaKlijent.klijent_id == db_klijent.id).all()
     cena_1_ids = database.query(Cena.id).filter(Cena.klijent_1_id == db_klijent.id).all()
-    response_data = {
-        "klijent": db_klijent,
-        "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids],
-        "cena_1_ids": [x[0] for x in cena_1_ids]
-    }
-    return response_data
-
+    return {"klijent": db_klijent, "sesijaklijent_ids": [x[0] for x in sesijaklijent_ids], "cena_1_ids": [x[0] for x in cena_1_ids]}
 
 @app.delete("/klijent/{klijent_id}/", response_model=None, tags=["Klijent"])
 async def delete_klijent(klijent_id: int, database: Session = Depends(get_db)):
     db_klijent = database.query(Klijent).filter(Klijent.id == klijent_id).first()
     if db_klijent is None:
         raise HTTPException(status_code=404, detail="Klijent not found")
-    # Clean up group memberships
     database.query(GrupaKlijent).filter(GrupaKlijent.klijent_id == klijent_id).delete()
     database.delete(db_klijent)
     database.commit()
