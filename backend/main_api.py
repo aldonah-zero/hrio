@@ -1138,74 +1138,65 @@ def search_sesija(database: Session = Depends(get_db)) -> list:
     return database.query(Sesija).all()
 
 # ============================================
-# EXPORT EXCEL — MUST be BEFORE /sesija/{sesija_id}/
+# REPLACE your existing export_sesija_excel function with this one
+# (keep the same @app.get decorator and position in main_api.py)
 # ============================================
+
 @app.get("/sesija/export-excel/", response_model=None, tags=["Sesija"])
 def export_sesija_excel(database: Session = Depends(get_db)):
     from datetime import date as date_type
+
+    # Fetch all data
     sesija_list = database.query(Sesija).all()
     all_sk = database.query(SesijaKlijent).all()
     all_sg = database.query(SesijaGrupa).all()
     all_klijenti = database.query(Klijent).all()
     all_grupe = database.query(Grupa).all()
     all_cene = database.query(Cena).all()
+    all_gk = database.query(GrupaKlijent).all()
+
     klijent_map = {k.id: k for k in all_klijenti}
     grupa_map = {g.id: g for g in all_grupe}
     sk_map = {sk.sesija_id: sk.klijent_id for sk in all_sk}
     sg_map = {sg.sesija_1_id: sg.grupa_id for sg in all_sg}
+
+    # Group members map: grupa_id -> list of klijent names
+    grupa_members_map = {}
+    for gk in all_gk:
+        if gk.grupa_id not in grupa_members_map:
+            grupa_members_map[gk.grupa_id] = []
+        k = klijent_map.get(gk.klijent_id)
+        if k:
+            grupa_members_map[gk.grupa_id].append(f"{k.ime} {k.prezime}")
+
+    # Payment lookup
     payment_map = {}
     for c in all_cene:
         if c.status == "placeno" and c.sesija_2_id:
             if c.sesija_2_id not in payment_map:
                 payment_map[c.sesija_2_id] = []
             payment_map[c.sesija_2_id].append(c)
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sesije"
-    header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
-    header_fill = PatternFill("solid", fgColor="1E293B")
-    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    cell_font = Font(name="Arial", size=10)
-    paid_fill = PatternFill("solid", fgColor="DCFCE7")
-    unpaid_fill = PatternFill("solid", fgColor="FEF3C7")
-    total_font = Font(name="Arial", bold=True, size=11)
-    total_fill = PatternFill("solid", fgColor="EEF2FF")
-    thin_border = Border(left=Side(style="thin", color="E2E8F0"), right=Side(style="thin", color="E2E8F0"), top=Side(style="thin", color="E2E8F0"), bottom=Side(style="thin", color="E2E8F0"))
-    ws.merge_cells("A1:K1")
-    title_cell = ws["A1"]
-    title_cell.value = f"Izvestaj sesija — {date_type.today().strftime('%d.%m.%Y')}"
-    title_cell.font = Font(name="Arial", bold=True, size=14, color="1E293B")
-    title_cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 35
-    headers = ["R.br.", "Klijent / Grupa", "Tip", "Datum", "Pocetak", "Kraj", "Cena (RSD)", "Status", "Placeno", "Nacin placanja", "Datum uplate"]
-    for col_idx, header in enumerate(headers, 1):
-        cell = ws.cell(row=3, column=col_idx, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_align
-        cell.border = thin_border
-    ws.row_dimensions[3].height = 28
-    col_widths = [6, 25, 14, 14, 10, 10, 14, 14, 12, 16, 14]
-    for i, w in enumerate(col_widths, 1):
-        ws.column_dimensions[get_column_letter(i)].width = w
-    row_num = 4
-    total_cena = 0
-    total_placeno = 0
-    total_neplaceno = 0
-    for idx, s in enumerate(sesija_list, 1):
+
+    # Build enriched session list
+    enriched = []
+    for s in sesija_list:
         klijent_id = sk_map.get(s.id)
         grupa_id = sg_map.get(s.id)
         if klijent_id:
             klijent = klijent_map.get(klijent_id)
             ime = f"{klijent.ime} {klijent.prezime}" if klijent else "—"
             tip = "Individualna"
+            grupa_naziv = "—"
         elif grupa_id:
             grupa = grupa_map.get(grupa_id)
             ime = f"{grupa.naziv}" if grupa else "—"
             tip = "Grupna"
+            grupa_naziv = grupa.naziv if grupa else "—"
         else:
             ime = "—"
             tip = "—"
+            grupa_naziv = "—"
+
         payments = payment_map.get(s.id, [])
         is_paid = len(payments) > 0
         nacin = payments[0].nacin_placanja if payments else "—"
@@ -1215,12 +1206,8 @@ def export_sesija_excel(database: Session = Depends(get_db)):
                 datum_uplate_val = payments[0].datum_uplate.strftime("%d.%m.%Y")
             except Exception:
                 datum_uplate_val = str(payments[0].datum_uplate)
+
         session_cena = s.cena if s.cena else 0
-        total_cena += session_cena
-        if is_paid:
-            total_placeno += session_cena
-        else:
-            total_neplaceno += session_cena
         pocetak_datum = "—"
         pocetak_vreme = "—"
         kraj_vreme = "—"
@@ -1232,115 +1219,311 @@ def export_sesija_excel(database: Session = Depends(get_db)):
                 kraj_vreme = s.kraj.strftime("%H:%M")
         except Exception:
             pass
-        row_data = [idx, ime, tip, pocetak_datum, pocetak_vreme, kraj_vreme, session_cena, (s.status or "—").capitalize(), "Da" if is_paid else "Ne", (nacin or "—").capitalize(), datum_uplate_val]
-        for col_idx, value in enumerate(row_data, 1):
-            cell = ws.cell(row=row_num, column=col_idx, value=value)
-            cell.font = cell_font
+
+        # For group sessions, list members
+        clanovi = ""
+        if grupa_id and grupa_id in grupa_members_map:
+            clanovi = ", ".join(grupa_members_map[grupa_id])
+
+        enriched.append({
+            "ime": ime,
+            "tip": tip,
+            "grupa_naziv": grupa_naziv,
+            "clanovi": clanovi,
+            "datum": pocetak_datum,
+            "pocetak": pocetak_vreme,
+            "kraj": kraj_vreme,
+            "cena": session_cena,
+            "status": (s.status or "—").capitalize(),
+            "placeno": is_paid,
+            "nacin": (nacin or "—").capitalize() if nacin != "—" else "—",
+            "datum_uplate": datum_uplate_val,
+            "sesija_id": s.id,
+            "klijent_id": klijent_id,
+            "grupa_id": grupa_id,
+        })
+
+    # ===== STYLES =====
+    header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="1E293B")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    cell_font = Font(name="Arial", size=10)
+    paid_fill = PatternFill("solid", fgColor="DCFCE7")
+    unpaid_fill = PatternFill("solid", fgColor="FEF3C7")
+    paid_row_fill = PatternFill("solid", fgColor="F0FDF4")
+    unpaid_row_fill = PatternFill("solid", fgColor="FFFBEB")
+    total_font = Font(name="Arial", bold=True, size=11)
+    total_fill = PatternFill("solid", fgColor="EEF2FF")
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+
+    wb = openpyxl.Workbook()
+
+    # ============================================================
+    # HELPER: write a session table to a worksheet
+    # ============================================================
+    def write_session_table(ws, title_text, sessions, show_payment_cols=True, show_group_members=False):
+        # Determine columns
+        headers = ["R.br.", "Klijent / Grupa", "Tip"]
+        if show_group_members:
+            headers.append("Clanovi grupe")
+        headers += ["Datum", "Pocetak", "Kraj", "Cena (RSD)", "Status"]
+        if show_payment_cols:
+            headers += ["Placeno", "Nacin placanja", "Datum uplate"]
+
+        # Title
+        last_col_letter = get_column_letter(len(headers))
+        ws.merge_cells(f"A1:{last_col_letter}1")
+        title_cell = ws["A1"]
+        title_cell.value = title_text
+        title_cell.font = Font(name="Arial", bold=True, size=14, color="1E293B")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[1].height = 35
+
+        # Headers row
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
             cell.border = thin_border
-            cell.alignment = Alignment(horizontal="center" if col_idx != 2 else "left", vertical="center")
-        payment_cell = ws.cell(row=row_num, column=9)
-        if is_paid:
-            payment_cell.fill = paid_fill
-            payment_cell.font = Font(name="Arial", size=10, bold=True, color="166534")
-            for col_idx in range(1, len(headers) + 1):
-                if col_idx != 9:
-                    ws.cell(row=row_num, column=col_idx).fill = PatternFill("solid", fgColor="F0FDF4")
-        else:
-            payment_cell.fill = unpaid_fill
-            payment_cell.font = Font(name="Arial", size=10, bold=True, color="92400E")
+        ws.row_dimensions[3].height = 28
+
+        # Column widths
+        base_widths = {"R.br.": 6, "Klijent / Grupa": 25, "Tip": 14, "Clanovi grupe": 35,
+                       "Datum": 14, "Pocetak": 10, "Kraj": 10, "Cena (RSD)": 14,
+                       "Status": 14, "Placeno": 12, "Nacin placanja": 16, "Datum uplate": 14}
+        for col_idx, header in enumerate(headers, 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = base_widths.get(header, 14)
+
+        # Data rows
+        row_num = 4
+        total_cena = 0
+
+        for idx, s in enumerate(sessions, 1):
+            row_data = [idx, s["ime"], s["tip"]]
+            if show_group_members:
+                row_data.append(s["clanovi"])
+            row_data += [s["datum"], s["pocetak"], s["kraj"], s["cena"], s["status"]]
+            if show_payment_cols:
+                row_data += ["Da" if s["placeno"] else "Ne", s["nacin"], s["datum_uplate"]]
+
+            total_cena += s["cena"]
+
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_num, column=col_idx, value=value)
+                cell.font = cell_font
+                cell.border = thin_border
+                # Left-align name and members columns
+                h = headers[col_idx - 1]
+                cell.alignment = Alignment(
+                    horizontal="left" if h in ("Klijent / Grupa", "Clanovi grupe") else "center",
+                    vertical="center"
+                )
+
+            # Row coloring
+            if show_payment_cols:
+                placeno_col = headers.index("Placeno") + 1
+                payment_cell = ws.cell(row=row_num, column=placeno_col)
+                if s["placeno"]:
+                    payment_cell.fill = paid_fill
+                    payment_cell.font = Font(name="Arial", size=10, bold=True, color="166534")
+                    for ci in range(1, len(headers) + 1):
+                        if ci != placeno_col:
+                            ws.cell(row=row_num, column=ci).fill = paid_row_fill
+                else:
+                    payment_cell.fill = unpaid_fill
+                    payment_cell.font = Font(name="Arial", size=10, bold=True, color="92400E")
+                    for ci in range(1, len(headers) + 1):
+                        if ci != placeno_col:
+                            ws.cell(row=row_num, column=ci).fill = unpaid_row_fill
+            else:
+                # For paid-only or unpaid-only sheets, color entire row
+                is_paid_sheet = any(s["placeno"] for s in sessions[:1])  # check first item
+                row_fill = paid_row_fill if sessions and sessions[0]["placeno"] else unpaid_row_fill
+                for ci in range(1, len(headers) + 1):
+                    ws.cell(row=row_num, column=ci).fill = row_fill
+
+            row_num += 1
+
+        # Summary
+        cena_col = headers.index("Cena (RSD)") + 1
         row_num += 1
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:F{row_num}")
-    ws.cell(row=row_num, column=1, value="UKUPNO").font = total_font
-    ws.cell(row=row_num, column=1).fill = total_fill
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    ws.cell(row=row_num, column=7, value=total_cena).font = total_font
-    ws.cell(row=row_num, column=7).fill = total_fill
-    ws.cell(row=row_num, column=7).number_format = '#,##0'
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:F{row_num}")
-    ws.cell(row=row_num, column=1, value="Ukupno placeno").font = Font(name="Arial", bold=True, size=10, color="166534")
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    ws.cell(row=row_num, column=7, value=total_placeno).font = Font(name="Arial", bold=True, size=10, color="166534")
-    ws.cell(row=row_num, column=7).fill = paid_fill
-    ws.cell(row=row_num, column=7).number_format = '#,##0'
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:F{row_num}")
-    ws.cell(row=row_num, column=1, value="Ukupno neplaceno").font = Font(name="Arial", bold=True, size=10, color="92400E")
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    ws.cell(row=row_num, column=7, value=total_neplaceno).font = Font(name="Arial", bold=True, size=10, color="92400E")
-    ws.cell(row=row_num, column=7).fill = unpaid_fill
-    ws.cell(row=row_num, column=7).number_format = '#,##0'
-    row_num += 1
-    ws.merge_cells(f"A{row_num}:F{row_num}")
-    ws.cell(row=row_num, column=1, value="Broj sesija").font = Font(name="Arial", size=10)
-    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
-    ws.cell(row=row_num, column=7, value=len(sesija_list)).font = Font(name="Arial", bold=True, size=10)
-    # Sheet 2: Per-client summary
-    ws2 = wb.create_sheet("Po klijentu")
-    ws2.merge_cells("A1:E1")
-    ws2["A1"].value = "Statistika po klijentu"
-    ws2["A1"].font = Font(name="Arial", bold=True, size=14, color="1E293B")
-    ws2["A1"].alignment = Alignment(horizontal="center")
-    ws2.row_dimensions[1].height = 35
-    client_headers = ["Klijent", "Br. sesija", "Ukupno (RSD)", "Placeno (RSD)", "Neplaceno (RSD)"]
+        summary_end = cena_col - 1
+        ws.merge_cells(f"A{row_num}:{get_column_letter(summary_end)}{row_num}")
+        ws.cell(row=row_num, column=1, value="UKUPNO").font = total_font
+        ws.cell(row=row_num, column=1).fill = total_fill
+        ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+        ws.cell(row=row_num, column=cena_col, value=total_cena).font = total_font
+        ws.cell(row=row_num, column=cena_col).fill = total_fill
+        ws.cell(row=row_num, column=cena_col).number_format = '#,##0'
+
+        row_num += 1
+        ws.merge_cells(f"A{row_num}:{get_column_letter(summary_end)}{row_num}")
+        ws.cell(row=row_num, column=1, value="Broj sesija").font = Font(name="Arial", size=10)
+        ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+        ws.cell(row=row_num, column=cena_col, value=len(sessions)).font = Font(name="Arial", bold=True, size=10)
+
+        return total_cena
+
+    # ============================================================
+    # SHEET 1: Sve sesije (overview)
+    # ============================================================
+    ws1 = wb.active
+    ws1.title = "Sve sesije"
+    paid_sessions = [s for s in enriched if s["placeno"]]
+    unpaid_sessions = [s for s in enriched if not s["placeno"]]
+    total_all = sum(s["cena"] for s in enriched)
+    total_paid = sum(s["cena"] for s in paid_sessions)
+    total_unpaid = sum(s["cena"] for s in unpaid_sessions)
+
+    write_session_table(ws1, f"Izvestaj sesija — {date_type.today().strftime('%d.%m.%Y')}", enriched, show_payment_cols=True, show_group_members=True)
+
+    # Add paid/unpaid breakdown after the summary
+    last_row = ws1.max_row
+    r = last_row + 1
+    cena_col = 8  # adjusted for the extra "Clanovi grupe" column
+    ws1.merge_cells(f"A{r}:G{r}")
+    ws1.cell(row=r, column=1, value="Ukupno placeno").font = Font(name="Arial", bold=True, size=10, color="166534")
+    ws1.cell(row=r, column=1).alignment = Alignment(horizontal="right")
+    ws1.cell(row=r, column=cena_col, value=total_paid).font = Font(name="Arial", bold=True, size=10, color="166534")
+    ws1.cell(row=r, column=cena_col).fill = paid_fill
+    ws1.cell(row=r, column=cena_col).number_format = '#,##0'
+
+    r += 1
+    ws1.merge_cells(f"A{r}:G{r}")
+    ws1.cell(row=r, column=1, value="Ukupno neplaceno").font = Font(name="Arial", bold=True, size=10, color="92400E")
+    ws1.cell(row=r, column=1).alignment = Alignment(horizontal="right")
+    ws1.cell(row=r, column=cena_col, value=total_unpaid).font = Font(name="Arial", bold=True, size=10, color="92400E")
+    ws1.cell(row=r, column=cena_col).fill = unpaid_fill
+    ws1.cell(row=r, column=cena_col).number_format = '#,##0'
+
+    # ============================================================
+    # SHEET 2: Placeno (only paid sessions with details)
+    # ============================================================
+    ws2 = wb.create_sheet("Placeno")
+    write_session_table(ws2, f"Placene sesije — {date_type.today().strftime('%d.%m.%Y')}", paid_sessions, show_payment_cols=True, show_group_members=True)
+
+    # ============================================================
+    # SHEET 3: Neplaceno (only unpaid sessions)
+    # ============================================================
+    ws3 = wb.create_sheet("Neplaceno")
+    write_session_table(ws3, f"Neplacene sesije — {date_type.today().strftime('%d.%m.%Y')}", unpaid_sessions, show_payment_cols=False, show_group_members=True)
+
+    # ============================================================
+    # SHEET 4: Po klijentu (per-client/group breakdown)
+    # ============================================================
+    ws4 = wb.create_sheet("Po klijentu")
+    ws4.merge_cells("A1:G1")
+    ws4["A1"].value = "Statistika po klijentu / grupi"
+    ws4["A1"].font = Font(name="Arial", bold=True, size=14, color="1E293B")
+    ws4["A1"].alignment = Alignment(horizontal="center")
+    ws4.row_dimensions[1].height = 35
+
+    client_headers = ["Klijent / Grupa", "Tip", "Br. sesija", "Ukupno (RSD)", "Placeno (RSD)", "Neplaceno (RSD)", "% naplaceno"]
     for col_idx, h in enumerate(client_headers, 1):
-        cell = ws2.cell(row=3, column=col_idx, value=h)
+        cell = ws4.cell(row=3, column=col_idx, value=h)
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = header_align
         cell.border = thin_border
-    ws2.column_dimensions["A"].width = 28
-    ws2.column_dimensions["B"].width = 12
-    ws2.column_dimensions["C"].width = 16
-    ws2.column_dimensions["D"].width = 16
-    ws2.column_dimensions["E"].width = 16
+    ws4.column_dimensions["A"].width = 28
+    ws4.column_dimensions["B"].width = 14
+    ws4.column_dimensions["C"].width = 12
+    ws4.column_dimensions["D"].width = 16
+    ws4.column_dimensions["E"].width = 16
+    ws4.column_dimensions["F"].width = 16
+    ws4.column_dimensions["G"].width = 14
+
+    # Aggregate per client/group
     client_stats = {}
-    for s in sesija_list:
-        klijent_id = sk_map.get(s.id)
-        grupa_id = sg_map.get(s.id)
-        if klijent_id:
-            klijent = klijent_map.get(klijent_id)
-            key = f"{klijent.ime} {klijent.prezime}" if klijent else f"Klijent #{klijent_id}"
-        elif grupa_id:
-            grupa = grupa_map.get(grupa_id)
-            key = f"[Grupa] {grupa.naziv}" if grupa else f"Grupa #{grupa_id}"
-        else:
-            key = "Nepoznato"
+    for s in enriched:
+        key = s["ime"]
+        tip = s["tip"]
         if key not in client_stats:
-            client_stats[key] = {"sessions": 0, "total": 0, "paid": 0, "unpaid": 0}
-        session_cena = s.cena if s.cena else 0
+            client_stats[key] = {"tip": tip, "sessions": 0, "total": 0, "paid": 0, "unpaid": 0}
         client_stats[key]["sessions"] += 1
-        client_stats[key]["total"] += session_cena
-        if s.id in payment_map:
-            client_stats[key]["paid"] += session_cena
+        client_stats[key]["total"] += s["cena"]
+        if s["placeno"]:
+            client_stats[key]["paid"] += s["cena"]
         else:
-            client_stats[key]["unpaid"] += session_cena
-    row2 = 4
+            client_stats[key]["unpaid"] += s["cena"]
+
+    row4 = 4
+    grand_total = 0
+    grand_paid = 0
+    grand_unpaid = 0
+
     for name, stats in sorted(client_stats.items()):
-        ws2.cell(row=row2, column=1, value=name).font = cell_font
-        ws2.cell(row=row2, column=2, value=stats["sessions"]).font = cell_font
-        ws2.cell(row=row2, column=2).alignment = Alignment(horizontal="center")
-        ws2.cell(row=row2, column=3, value=stats["total"]).font = cell_font
-        ws2.cell(row=row2, column=3).number_format = '#,##0'
-        ws2.cell(row=row2, column=4, value=stats["paid"]).font = Font(name="Arial", size=10, color="166534")
-        ws2.cell(row=row2, column=4).number_format = '#,##0'
-        ws2.cell(row=row2, column=4).fill = paid_fill
-        ws2.cell(row=row2, column=5, value=stats["unpaid"]).font = Font(name="Arial", size=10, color="92400E")
-        ws2.cell(row=row2, column=5).number_format = '#,##0'
+        ws4.cell(row=row4, column=1, value=name).font = cell_font
+        ws4.cell(row=row4, column=2, value=stats["tip"]).font = cell_font
+        ws4.cell(row=row4, column=2).alignment = Alignment(horizontal="center")
+        ws4.cell(row=row4, column=3, value=stats["sessions"]).font = cell_font
+        ws4.cell(row=row4, column=3).alignment = Alignment(horizontal="center")
+        ws4.cell(row=row4, column=4, value=stats["total"]).font = cell_font
+        ws4.cell(row=row4, column=4).number_format = '#,##0'
+        ws4.cell(row=row4, column=5, value=stats["paid"]).font = Font(name="Arial", size=10, color="166534")
+        ws4.cell(row=row4, column=5).number_format = '#,##0'
+        if stats["paid"] > 0:
+            ws4.cell(row=row4, column=5).fill = paid_fill
+        ws4.cell(row=row4, column=6, value=stats["unpaid"]).font = Font(name="Arial", size=10, color="92400E")
+        ws4.cell(row=row4, column=6).number_format = '#,##0'
         if stats["unpaid"] > 0:
-            ws2.cell(row=row2, column=5).fill = unpaid_fill
-        for c in range(1, 6):
-            ws2.cell(row=row2, column=c).border = thin_border
-        row2 += 1
+            ws4.cell(row=row4, column=6).fill = unpaid_fill
+
+        # Percentage
+        pct = (stats["paid"] / stats["total"] * 100) if stats["total"] > 0 else 0
+        pct_cell = ws4.cell(row=row4, column=7, value=round(pct, 1))
+        pct_cell.number_format = '0.0"%"'
+        pct_cell.font = cell_font
+        pct_cell.alignment = Alignment(horizontal="center")
+        if pct >= 100:
+            pct_cell.fill = paid_fill
+            pct_cell.font = Font(name="Arial", size=10, bold=True, color="166534")
+        elif pct == 0:
+            pct_cell.fill = unpaid_fill
+            pct_cell.font = Font(name="Arial", size=10, color="92400E")
+
+        for c in range(1, 8):
+            ws4.cell(row=row4, column=c).border = thin_border
+
+        grand_total += stats["total"]
+        grand_paid += stats["paid"]
+        grand_unpaid += stats["unpaid"]
+        row4 += 1
+
+    # Totals row
+    row4 += 1
+    ws4.merge_cells(f"A{row4}:C{row4}")
+    ws4.cell(row=row4, column=1, value="UKUPNO").font = total_font
+    ws4.cell(row=row4, column=1).fill = total_fill
+    ws4.cell(row=row4, column=1).alignment = Alignment(horizontal="right")
+    ws4.cell(row=row4, column=4, value=grand_total).font = total_font
+    ws4.cell(row=row4, column=4).fill = total_fill
+    ws4.cell(row=row4, column=4).number_format = '#,##0'
+    ws4.cell(row=row4, column=5, value=grand_paid).font = Font(name="Arial", bold=True, size=10, color="166534")
+    ws4.cell(row=row4, column=5).fill = paid_fill
+    ws4.cell(row=row4, column=5).number_format = '#,##0'
+    ws4.cell(row=row4, column=6, value=grand_unpaid).font = Font(name="Arial", bold=True, size=10, color="92400E")
+    ws4.cell(row=row4, column=6).fill = unpaid_fill
+    ws4.cell(row=row4, column=6).number_format = '#,##0'
+    grand_pct = (grand_paid / grand_total * 100) if grand_total > 0 else 0
+    ws4.cell(row=row4, column=7, value=round(grand_pct, 1)).font = total_font
+    ws4.cell(row=row4, column=7).number_format = '0.0"%"'
+    for c in range(1, 8):
+        ws4.cell(row=row4, column=c).border = thin_border
+
+    # Save
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     today_str = date_type.today().strftime("%Y-%m-%d")
     filename = f"izvestaj_sesije_{today_str}.xlsx"
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
-
-
 # ============================================
 # GET single sesija — MUST be AFTER export-excel
 # ============================================
