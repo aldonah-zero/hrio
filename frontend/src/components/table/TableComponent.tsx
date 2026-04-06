@@ -17,7 +17,6 @@ interface TableColumn {
   required?: boolean;
   lookupField?: string;
   relationshipKey?: string;
-  // Custom fields for session_type
   klijent_field?: string;
   grupa_field?: string;
 }
@@ -27,6 +26,8 @@ interface TableOptions {
   stripedRows?: boolean;
   showPagination?: boolean;
   rowsPerPage?: number;
+  showPaymentButton?: boolean;
+  showExportButton?: boolean;
   columns?: Array<
     | {
         field: string;
@@ -114,6 +115,30 @@ const getNestedValue = (obj: any, path: string): any => {
   return path.split(".").reduce((current, key) => current?.[key], obj);
 };
 
+// ============================================
+// Excel Export Helper
+// ============================================
+const exportToExcel = async (dataBinding: Record<string, any> | undefined) => {
+  const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  try {
+    const response = await axios.get(`${backendBase}/sesija/export-excel/`, {
+      responseType: "blob",
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+    const today = new Date().toISOString().split("T")[0];
+    link.setAttribute("download", `izvestaj_sesije_${today}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Error exporting Excel:", err);
+    alert("Greška pri izvozu Excel fajla. Proverite backend.");
+  }
+};
+
 export const TableComponent: React.FC<Props> = ({
   id,
   title,
@@ -132,6 +157,23 @@ export const TableComponent: React.FC<Props> = ({
     field: string;
     direction: "asc" | "desc";
   } | null>(null);
+
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentModalClosing, setPaymentModalClosing] = useState(false);
+  const [paymentRow, setPaymentRow] = useState<any>(null);
+  const [paymentValues, setPaymentValues] = useState<Record<string, any>>({});
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+
+  const closePaymentModal = () => {
+    setPaymentModalClosing(true);
+    setTimeout(() => {
+      setShowPaymentModal(false);
+      setPaymentModalClosing(false);
+      setPaymentError("");
+    }, 200);
+  };
 
   const fetchTableData = async () => {
     const endpoint = dataBinding?.endpoint
@@ -186,6 +228,8 @@ export const TableComponent: React.FC<Props> = ({
     stripedRows: options?.stripedRows ?? false,
     showPagination: options?.showPagination ?? true,
     rowsPerPage: options?.rowsPerPage ?? 5,
+    showPaymentButton: (options as any)?.showPaymentButton ?? false,
+    showExportButton: (options as any)?.showExportButton ?? false,
     columns: options?.columns ?? [],
     formColumns:
       (options as any)?.formColumns ?? (options as any)?.form_columns ?? [],
@@ -502,19 +546,20 @@ export const TableComponent: React.FC<Props> = ({
   }, [pageSize, filteredRows.length]);
 
   useEffect(() => {
-    if (!showModal) {
+    if (!showModal && !showPaymentModal) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        closeModal();
+        if (showPaymentModal) closePaymentModal();
+        else closeModal();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showModal]);
+  }, [showModal, showPaymentModal]);
 
   useEffect(() => {
     if (showModal) {
@@ -523,7 +568,6 @@ export const TableComponent: React.FC<Props> = ({
       formColumns.forEach((col) => {
         if (modalMode === "edit" && editRowData) {
           if (col.columnType === "session_type") {
-            // Determine session type from edit data
             if (editRowData.grupa_id || editRowData.grupa_naziv) {
               initialValues["session_type"] = "grupa";
               initialValues["grupa_id"] = editRowData.grupa_id || "";
@@ -532,14 +576,12 @@ export const TableComponent: React.FC<Props> = ({
               initialValues["session_type"] = "individualna";
               initialValues["klijent_id"] = "";
               initialValues["grupa_id"] = "";
-              // Try to find klijent_id from SesijaKlijent link
               const sk = editRowData.sesijaklijent_1;
               if (Array.isArray(sk) && sk.length > 0) {
                 initialValues["klijent_id"] = sk[0].klijent_id || "";
               }
             }
           } else if (col.columnType === "grupa_clanovi") {
-            // For edit mode, we need to fetch current members
             initialValues[col.field] = [];
           } else if (col.columnType === "lookup") {
             if (col.type === "list") {
@@ -588,7 +630,6 @@ export const TableComponent: React.FC<Props> = ({
         const backendBase =
           import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-        // Fetch options for all lookup, session_type, and grupa_clanovi columns
         const entitiesToFetch = new Set<string>();
 
         for (const col of formColumns) {
@@ -622,7 +663,6 @@ export const TableComponent: React.FC<Props> = ({
 
         setLookupOptions(opts);
 
-        // If editing a grupa, fetch its current members
         if (modalMode === "edit" && editRowData) {
           for (const col of formColumns) {
             if (col.columnType === "grupa_clanovi") {
@@ -713,6 +753,45 @@ export const TableComponent: React.FC<Props> = ({
     return row?.id ?? row?.ID ?? row?.Id ?? Object.values(row)[0];
   };
 
+  // ============================================
+  // Handle "Označi plaćeno" click
+  // ============================================
+  const handleMarkAsPaid = (row: any) => {
+    setPaymentRow(row);
+    setPaymentValues({
+      nacin_placanja: "gotovina",
+      datum_uplate: new Date().toISOString().split("T")[0],
+    });
+    setPaymentError("");
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!paymentRow) return;
+
+    setPaymentSaving(true);
+    setPaymentError("");
+    const backendBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+    try {
+      await axios.post(`${backendBase}/sesija/${paymentRow.id}/mark-paid/`, {
+        nacin_placanja: paymentValues.nacin_placanja || "gotovina",
+        datum_uplate: paymentValues.datum_uplate,
+      });
+
+      closePaymentModal();
+      await fetchTableData();
+    } catch (err: any) {
+      console.error("Error marking as paid:", err);
+      const detail = err?.response?.data?.detail;
+      setPaymentError(
+        typeof detail === "string" ? detail : "Greška pri označavanju uplate.",
+      );
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
   // Helper to render a form field based on column type
   const renderFormField = (col: TableColumn) => {
     // ============================================
@@ -730,7 +809,6 @@ export const TableComponent: React.FC<Props> = ({
             <span className="table-form-required">*</span>
           </label>
 
-          {/* Radio buttons */}
           <div
             style={{
               display: "flex",
@@ -836,15 +914,11 @@ export const TableComponent: React.FC<Props> = ({
             </button>
           </div>
 
-          {/* Dropdown for selected type */}
           {sessionType === "individualna" ? (
             <select
               value={formValues["klijent_id"] ?? ""}
               onChange={(e) =>
-                setFormValues((fv) => ({
-                  ...fv,
-                  klijent_id: e.target.value,
-                }))
+                setFormValues((fv) => ({ ...fv, klijent_id: e.target.value }))
               }
               className="table-form-select"
             >
@@ -860,10 +934,7 @@ export const TableComponent: React.FC<Props> = ({
             <select
               value={formValues["grupa_id"] ?? ""}
               onChange={(e) =>
-                setFormValues((fv) => ({
-                  ...fv,
-                  grupa_id: e.target.value,
-                }))
+                setFormValues((fv) => ({ ...fv, grupa_id: e.target.value }))
               }
               className="table-form-select"
             >
@@ -883,7 +954,7 @@ export const TableComponent: React.FC<Props> = ({
     }
 
     // ============================================
-    // GRUPA CLANOVI: multi-select checkbox list of klijenti
+    // GRUPA CLANOVI
     // ============================================
     if (col.columnType === "grupa_clanovi") {
       const entityKey = (col.entity || "klijent").toLowerCase();
@@ -942,7 +1013,7 @@ export const TableComponent: React.FC<Props> = ({
     }
 
     // ============================================
-    // LOOKUP (existing logic)
+    // LOOKUP
     // ============================================
     if (col.columnType === "lookup" && col.entity) {
       const endpoint = col.entity.toLowerCase();
@@ -950,7 +1021,6 @@ export const TableComponent: React.FC<Props> = ({
 
       if (col.type === "list") {
         const selectedValues = formValues[col.field] || [];
-
         return (
           <div key={col.field} className="table-form-group">
             <label className="table-form-label">
@@ -1018,10 +1088,7 @@ export const TableComponent: React.FC<Props> = ({
             id={`modal-input-${col.field}`}
             value={formValues[col.field] ?? ""}
             onChange={(e) =>
-              setFormValues((fv) => ({
-                ...fv,
-                [col.field]: e.target.value,
-              }))
+              setFormValues((fv) => ({ ...fv, [col.field]: e.target.value }))
             }
             className="table-form-select"
           >
@@ -1057,10 +1124,7 @@ export const TableComponent: React.FC<Props> = ({
             id={`modal-input-${col.field}`}
             value={formValues[col.field] ?? ""}
             onChange={(e) =>
-              setFormValues((fv) => ({
-                ...fv,
-                [col.field]: e.target.value,
-              }))
+              setFormValues((fv) => ({ ...fv, [col.field]: e.target.value }))
             }
             className="table-form-select"
           >
@@ -1086,10 +1150,7 @@ export const TableComponent: React.FC<Props> = ({
             type="checkbox"
             checked={formValues[col.field] ?? false}
             onChange={(e) =>
-              setFormValues((fv) => ({
-                ...fv,
-                [col.field]: e.target.checked,
-              }))
+              setFormValues((fv) => ({ ...fv, [col.field]: e.target.checked }))
             }
             className="table-form-checkbox"
           />
@@ -1106,7 +1167,7 @@ export const TableComponent: React.FC<Props> = ({
     }
 
     // ============================================
-    // DEFAULT: text/number/date input
+    // DEFAULT
     // ============================================
     return (
       <div key={col.field} className="table-form-group">
@@ -1138,15 +1199,100 @@ export const TableComponent: React.FC<Props> = ({
           step={col.type === "float" ? "any" : undefined}
           value={formValues[col.field] ?? ""}
           onChange={(e) =>
-            setFormValues((fv) => ({
-              ...fv,
-              [col.field]: e.target.value,
-            }))
+            setFormValues((fv) => ({ ...fv, [col.field]: e.target.value }))
           }
           placeholder={col.type === "list" ? "item1, item2, item3" : ""}
           className="table-form-input"
         />
       </div>
+    );
+  };
+
+  // ============================================
+  // Render payment status cell
+  // ============================================
+  const renderPaymentStatusCell = (row: any) => {
+    const isPaid = row.placeno === true;
+
+    if (isPaid) {
+      return (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "4px 12px",
+            borderRadius: "20px",
+            fontSize: "12px",
+            fontWeight: 600,
+            backgroundColor: "#dcfce7",
+            color: "#166534",
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#166534"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Plaćeno
+        </span>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleMarkAsPaid(row);
+        }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "4px 12px",
+          borderRadius: "20px",
+          fontSize: "12px",
+          fontWeight: 600,
+          backgroundColor: "#fef3c7",
+          color: "#92400e",
+          border: "1px solid #fcd34d",
+          cursor: "pointer",
+          transition: "all 0.2s",
+          fontFamily: "inherit",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "#fde68a";
+          e.currentTarget.style.transform = "translateY(-1px)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "#fef3c7";
+          e.currentTarget.style.transform = "translateY(0)";
+        }}
+        title="Označi kao plaćeno"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#92400e"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="12" y1="1" x2="12" y2="23" />
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+        Naplati
+      </button>
     );
   };
 
@@ -1158,88 +1304,326 @@ export const TableComponent: React.FC<Props> = ({
         </h3>
       )}
       {tableSaving && (
-  <div style={{
-    position: "absolute",
-    inset: 0,
-    backgroundColor: "rgba(255,255,255,0.7)",
-    zIndex: 10,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "8px",
-    backdropFilter: "blur(2px)",
-  }}>
-    <svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="22" cy="22" r="18" fill="none" stroke="#e2e8f0" strokeWidth="3.5" />
-      <circle cx="22" cy="22" r="18" fill="none" stroke="#6366f1" strokeWidth="3.5"
-        strokeDasharray="80 33" strokeLinecap="round">
-        <animateTransform
-          attributeName="transform"
-          type="rotate"
-          from="0 22 22"
-          to="360 22 22"
-          dur="0.7s"
-          repeatCount="indefinite"
-        />
-      </circle>
-    </svg>
-  </div>
-)}
-      {resolvedOptions.actionButtons && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(255,255,255,0.7)",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "8px",
+            backdropFilter: "blur(2px)",
+          }}
+        >
+          <svg
+            width="44"
+            height="44"
+            viewBox="0 0 44 44"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="22"
+              cy="22"
+              r="18"
+              fill="none"
+              stroke="#e2e8f0"
+              strokeWidth="3.5"
+            />
+            <circle
+              cx="22"
+              cy="22"
+              r="18"
+              fill="none"
+              stroke="#6366f1"
+              strokeWidth="3.5"
+              strokeDasharray="80 33"
+              strokeLinecap="round"
+            >
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from="0 22 22"
+                to="360 22 22"
+                dur="0.7s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          </svg>
+        </div>
+      )}
+
+      {/* Action buttons row */}
+      {(resolvedOptions.actionButtons || resolvedOptions.showExportButton) && (
         <div
           style={{
             display: "flex",
             justifyContent: "flex-end",
             marginBottom: "8px",
+            gap: "10px",
+            flexWrap: "wrap",
           }}
         >
-          <button
-            className="table-add-btn"
-            style={{
-              padding: "8px 18px",
-              background: "linear-gradient(135deg, #6366f1, #7c3aed)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "10px",
-              fontWeight: 600,
-              cursor: "pointer",
-              fontSize: "13px",
-              boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
-              letterSpacing: "0.01em",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontFamily: "inherit",
-            }}
-            type="button"
-            title={`Add ${dataBinding?.entity || "Register"}`}
-            onClick={() => {
-              setModalMode("add");
-              setEditRowData(null);
-              setShowModal(true);
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-1px)";
-              e.currentTarget.style.boxShadow =
-                "0 6px 16px rgba(99, 102, 241, 0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow =
-                "0 4px 12px rgba(99, 102, 241, 0.3)";
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <rect x="9" y="4" width="2" height="12" rx="1" fill="white" />
-              <rect x="4" y="9" width="12" height="2" rx="1" fill="white" />
-            </svg>
-            {`+ Add ${dataBinding?.entity || "Register"}`}
-          </button>
+          {/* Excel Export Button */}
+          {resolvedOptions.showExportButton && (
+            <button
+              style={{
+                padding: "8px 18px",
+                background: "linear-gradient(135deg, #059669, #047857)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontSize: "13px",
+                boxShadow: "0 4px 12px rgba(5, 150, 105, 0.3)",
+                letterSpacing: "0.01em",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontFamily: "inherit",
+              }}
+              type="button"
+              title="Izvezi izveštaj u Excel"
+              onClick={() => exportToExcel(dataBinding)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow =
+                  "0 6px 16px rgba(5, 150, 105, 0.4)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow =
+                  "0 4px 12px rgba(5, 150, 105, 0.3)";
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+              Izvezi Excel
+            </button>
+          )}
+
+          {/* Add button */}
+          {resolvedOptions.actionButtons && (
+            <button
+              className="table-add-btn"
+              style={{
+                padding: "8px 18px",
+                background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontSize: "13px",
+                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+                letterSpacing: "0.01em",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontFamily: "inherit",
+              }}
+              type="button"
+              title={`Add ${dataBinding?.entity || "Register"}`}
+              onClick={() => {
+                setModalMode("add");
+                setEditRowData(null);
+                setShowModal(true);
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow =
+                  "0 6px 16px rgba(99, 102, 241, 0.4)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow =
+                  "0 4px 12px rgba(99, 102, 241, 0.3)";
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                <rect x="9" y="4" width="2" height="12" rx="1" fill="white" />
+                <rect x="4" y="9" width="12" height="2" rx="1" fill="white" />
+              </svg>
+              {`+ Add ${dataBinding?.entity || "Register"}`}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Modal */}
+      {/* Payment Modal */}
+      {showPaymentModal &&
+        createPortal(
+          <div
+            className={`cal-modal-overlay ${paymentModalClosing ? "closing" : ""}`}
+            onClick={closePaymentModal}
+          >
+            <div
+              className={`cal-modal ${paymentModalClosing ? "closing" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "420px" }}
+            >
+              <div className="cal-modal-header">
+                <h2>Označi kao plaćeno</h2>
+                <button
+                  type="button"
+                  className="cal-modal-close"
+                  onClick={closePaymentModal}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              {paymentError && (
+                <div className="table-modal-error">{paymentError}</div>
+              )}
+
+              <div className="cal-modal-body">
+                {paymentRow && (
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      borderRadius: "10px",
+                      padding: "14px 16px",
+                      marginBottom: "16px",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "#1e293b",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      {paymentRow.klijent_ime || "Sesija"}
+                    </div>
+                    <div style={{ fontSize: "13px", color: "#64748b" }}>
+                      {formatCellValue(paymentRow.pocetak, "datetime")} —{" "}
+                      {paymentRow.cena?.toLocaleString()} RSD
+                    </div>
+                  </div>
+                )}
+
+                <div className="table-form-group">
+                  <label className="table-form-label">
+                    Način plaćanja
+                    <span className="table-form-required">*</span>
+                  </label>
+                  <div
+                    style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
+                  >
+                    {["gotovina", "kartica", "prenos"].map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() =>
+                          setPaymentValues((pv) => ({
+                            ...pv,
+                            nacin_placanja: method,
+                          }))
+                        }
+                        style={{
+                          flex: 1,
+                          minWidth: "80px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border:
+                            paymentValues.nacin_placanja === method
+                              ? "2px solid #6366f1"
+                              : "1.5px solid #e2e8f0",
+                          background:
+                            paymentValues.nacin_placanja === method
+                              ? "linear-gradient(135deg, #eef2ff, #e0e7ff)"
+                              : "#fff",
+                          color:
+                            paymentValues.nacin_placanja === method
+                              ? "#4338ca"
+                              : "#64748b",
+                          fontWeight: 600,
+                          fontSize: "13px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          fontFamily: "inherit",
+                          textTransform: "capitalize",
+                        }}
+                      >
+                        {method === "gotovina"
+                          ? "💵 Gotovina"
+                          : method === "kartica"
+                            ? "💳 Kartica"
+                            : "🏦 Prenos"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="table-form-group">
+                  <label htmlFor="payment-date" className="table-form-label">
+                    Datum uplate
+                    <span className="table-form-required">*</span>
+                  </label>
+                  <input
+                    id="payment-date"
+                    type="date"
+                    value={paymentValues.datum_uplate || ""}
+                    onChange={(e) =>
+                      setPaymentValues((pv) => ({
+                        ...pv,
+                        datum_uplate: e.target.value,
+                      }))
+                    }
+                    className="table-form-input"
+                  />
+                </div>
+              </div>
+
+              <div className="cal-modal-footer">
+                <button
+                  type="button"
+                  onClick={closePaymentModal}
+                  className="cal-btn cal-btn-secondary"
+                >
+                  Otkaži
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePaymentSubmit}
+                  disabled={paymentSaving}
+                  className="cal-btn cal-btn-primary"
+                  style={{
+                    background: "linear-gradient(135deg, #059669, #047857)",
+                    opacity: paymentSaving ? 0.7 : 1,
+                  }}
+                >
+                  {paymentSaving ? "Čuvanje..." : "✓ Potvrdi uplatu"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Main Add/Edit Modal */}
       {showModal &&
         createPortal(
           <div
@@ -1396,7 +1780,6 @@ export const TableComponent: React.FC<Props> = ({
                     }
                   });
 
-                  // Close modal immediately, show saving indicator
                   closeModal();
                   setTableSaving(true);
 
@@ -1487,25 +1870,29 @@ export const TableComponent: React.FC<Props> = ({
                         letterSpacing: "0.01em",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
+                      {column.type === "payment_status" ? (
                         <span>{column.label}</span>
-                        <ColumnSort
-                          column={column}
-                          currentSort={sortConfig}
-                          onSortChange={handleSortChange}
-                        />
-                        <ColumnFilter
-                          column={column}
-                          onFilterChange={handleFilterChange}
-                          currentValue={columnFilters[column.field] || ""}
-                        />
-                      </div>
+                      ) : (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>{column.label}</span>
+                          <ColumnSort
+                            column={column}
+                            currentSort={sortConfig}
+                            onSortChange={handleSortChange}
+                          />
+                          <ColumnFilter
+                            column={column}
+                            onFilterChange={handleFilterChange}
+                            currentValue={columnFilters[column.field] || ""}
+                          />
+                        </div>
+                      )}
                     </th>
                   ))}
                   {resolvedOptions.actionButtons && (
@@ -1528,6 +1915,7 @@ export const TableComponent: React.FC<Props> = ({
               {visibleRows.map((row, rowIndex) => {
                 const actualRowIndex = (currentPage - 1) * pageSize + rowIndex;
                 const isSelected = selectedRowIndex === actualRowIndex;
+                const isPaid = row.placeno === true;
 
                 return (
                   <tr
@@ -1540,27 +1928,44 @@ export const TableComponent: React.FC<Props> = ({
                     style={{
                       backgroundColor: isSelected
                         ? "#dbeafe"
-                        : resolvedOptions.stripedRows && rowIndex % 2 === 1
-                          ? "#f8fafc"
-                          : "#ffffff",
+                        : isPaid
+                          ? "#f0fdf4"
+                          : resolvedOptions.stripedRows && rowIndex % 2 === 1
+                            ? "#f8fafc"
+                            : "#ffffff",
                       borderBottom: "1px solid #e2e8f0",
                       cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = "#f1f5f9";
+                        e.currentTarget.style.backgroundColor = isPaid
+                          ? "#dcfce7"
+                          : "#f1f5f9";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor =
-                          resolvedOptions.stripedRows && rowIndex % 2 === 1
+                        e.currentTarget.style.backgroundColor = isPaid
+                          ? "#f0fdf4"
+                          : resolvedOptions.stripedRows && rowIndex % 2 === 1
                             ? "#f8fafc"
                             : "#ffffff";
                       }
                     }}
                   >
                     {columns.map((column) => {
+                      // Payment status column - special rendering
+                      if (column.type === "payment_status") {
+                        return (
+                          <td
+                            key={`${id}-row-${rowIndex}-cell-${column.field}`}
+                            style={{ padding: "10px 12px" }}
+                          >
+                            {renderPaymentStatusCell(row)}
+                          </td>
+                        );
+                      }
+
                       let cellValue;
                       if (
                         column.columnType === "lookup" &&
@@ -1710,7 +2115,6 @@ export const TableComponent: React.FC<Props> = ({
                                 ? `${backendBase}${url}/${rowId}/`
                                 : `${url}/${rowId}/`;
 
-                              // Optimistic removal
                               setTableData((prev) =>
                                 prev.filter((r) => getRowId(r) !== rowId),
                               );

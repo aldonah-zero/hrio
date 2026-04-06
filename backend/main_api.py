@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic_classes import *
 from sql_alchemy import *
-
+from fastapi.responses import StreamingResponse
+import io
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from pydantic import BaseModel as PydanticBaseModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1794,7 +1798,453 @@ async def delete_sesija(sesija_id: int, database: Session = Depends(get_db)):
         logger.error(f"Failed to send email: {e}")
 
     return {"message": "Deleted", "id": sesija_id}
+"""
+=============================================================
+  BACKEND ADDITIONS — paste these into your main.py
+  (after the existing Sesija endpoints, before Grupa section)
+=============================================================
 
+Two new endpoints:
+  1. POST /sesija/{sesija_id}/mark-paid/  — marks a session as paid,
+     creates a Cena record, and returns updated session
+  2. GET  /sesija/export-excel/           — generates an Excel report
+     of all sessions with payment status
+
+Also requires adding 'placeno' field to the Sesija response
+in get_all_sesija (see instructions at bottom).
+"""
+
+# ============================================
+#  1. ADD TO sql_alchemy.py — no schema change needed!
+#     The 'placeno' field is computed from Cena records.
+# ============================================
+
+
+# ============================================
+#  2. ADD THESE IMPORTS at the top of main.py
+# ============================================
+# from fastapi.responses import StreamingResponse
+# import io
+# import openpyxl
+# from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+# from pydantic import BaseModel as PydanticBaseModel
+
+
+# ============================================
+#  3. ADD THIS PYDANTIC MODEL (near other models or in pydantic_classes.py)
+# ============================================
+
+# class MarkPaidRequest(PydanticBaseModel):
+#     nacin_placanja: str = "gotovina"
+#     datum_uplate: Optional[date] = None
+
+
+# ============================================
+#  4. ADD THESE ENDPOINTS to main.py
+# ============================================
+
+# --- Mark session as paid ---
+
+@app.post("/sesija/{sesija_id}/mark-paid/", response_model=None, tags=["Sesija"])
+async def mark_sesija_paid(
+    sesija_id: int,
+    payment_data: dict = Body(...),
+    database: Session = Depends(get_db),
+):
+    """
+    Mark a session as paid:
+    - Creates a Cena (payment) record linked to the session
+    - Links to the client (individual) or all group members
+    - Returns success message
+    """
+    from datetime import date as date_type
+
+    db_sesija = database.query(Sesija).filter(Sesija.id == sesija_id).first()
+    if db_sesija is None:
+        raise HTTPException(status_code=404, detail="Sesija not found")
+
+    # Check if already paid
+    existing_payment = database.query(Cena).filter(
+        Cena.sesija_2_id == sesija_id,
+        Cena.status == "placeno",
+    ).first()
+    if existing_payment:
+        raise HTTPException(status_code=400, detail="Ova sesija je već označena kao plaćena.")
+
+    nacin_placanja = payment_data.get("nacin_placanja", "gotovina")
+    datum_str = payment_data.get("datum_uplate")
+    if datum_str:
+        try:
+            datum_uplate = date_type.fromisoformat(datum_str)
+        except (ValueError, TypeError):
+            datum_uplate = date_type.today()
+    else:
+        datum_uplate = date_type.today()
+
+    # Determine client(s)
+    sk = database.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == sesija_id).first()
+    sg = database.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == sesija_id).first()
+
+    if sk and sk.klijent_id:
+        # Individual session — one Cena record
+        db_cena = Cena(
+            cena=db_sesija.cena,
+            status="placeno",
+            nacin_placanja=nacin_placanja,
+            datum_uplate=datum_uplate,
+            sesija_2_id=sesija_id,
+            klijent_1_id=sk.klijent_id,
+        )
+        database.add(db_cena)
+    elif sg and sg.grupa_id:
+        # Group session — one Cena record per group member
+        group_members = database.query(GrupaKlijent).filter(
+            GrupaKlijent.grupa_id == sg.grupa_id
+        ).all()
+
+        if not group_members:
+            # No members, create a single record without client
+            db_cena = Cena(
+                cena=db_sesija.cena,
+                status="placeno",
+                nacin_placanja=nacin_placanja,
+                datum_uplate=datum_uplate,
+                sesija_2_id=sesija_id,
+                klijent_1_id=None,
+            )
+            database.add(db_cena)
+        else:
+            # Per-member price (split evenly) or full price per member — using full price
+            for gk in group_members:
+                db_cena = Cena(
+                    cena=db_sesija.cena,
+                    status="placeno",
+                    nacin_placanja=nacin_placanja,
+                    datum_uplate=datum_uplate,
+                    sesija_2_id=sesija_id,
+                    klijent_1_id=gk.klijent_id,
+                )
+                database.add(db_cena)
+    else:
+        # Fallback — no client link
+        db_cena = Cena(
+            cena=db_sesija.cena,
+            status="placeno",
+            nacin_placanja=nacin_placanja,
+            datum_uplate=datum_uplate,
+            sesija_2_id=sesija_id,
+            klijent_1_id=None,
+        )
+        database.add(db_cena)
+
+    database.commit()
+    return {"message": "Sesija označena kao plaćena", "sesija_id": sesija_id}
+
+
+# --- Excel export ---
+
+@app.get("/sesija/export-excel/", response_model=None, tags=["Sesija"])
+def export_sesija_excel(database: Session = Depends(get_db)):
+    """
+    Export all sessions as an Excel report with:
+    - Session details (client/group, date, time, price, status)
+    - Payment status (Plaćeno / Nije plaćeno)
+    - Payment method and date
+    - Summary statistics at the bottom
+    """
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from fastapi.responses import StreamingResponse
+    from datetime import date as date_type
+
+    # Fetch all data
+    sesija_list = database.query(Sesija).all()
+    all_sk = database.query(SesijaKlijent).all()
+    all_sg = database.query(SesijaGrupa).all()
+    all_klijenti = database.query(Klijent).all()
+    all_grupe = database.query(Grupa).all()
+    all_cene = database.query(Cena).all()
+
+    klijent_map = {k.id: k for k in all_klijenti}
+    grupa_map = {g.id: g for g in all_grupe}
+    sk_map = {sk.sesija_id: sk.klijent_id for sk in all_sk}
+    sg_map = {sg.sesija_1_id: sg.grupa_id for sg in all_sg}
+
+    # Payment lookup: sesija_id -> list of Cena records with status "placeno"
+    payment_map: dict = {}
+    for c in all_cene:
+        if c.status == "placeno" and c.sesija_2_id:
+            if c.sesija_2_id not in payment_map:
+                payment_map[c.sesija_2_id] = []
+            payment_map[c.sesija_2_id].append(c)
+
+    # Create workbook
+    wb = openpyxl.Workbook()
+
+    # ===== SHEET 1: All sessions =====
+    ws = wb.active
+    ws.title = "Sesije"
+
+    # Styles
+    header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="1E293B")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    cell_font = Font(name="Arial", size=10)
+    paid_fill = PatternFill("solid", fgColor="DCFCE7")
+    unpaid_fill = PatternFill("solid", fgColor="FEF3C7")
+    total_font = Font(name="Arial", bold=True, size=11)
+    total_fill = PatternFill("solid", fgColor="EEF2FF")
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+
+    # Title row
+    ws.merge_cells("A1:H1")
+    title_cell = ws["A1"]
+    title_cell.value = f"Izveštaj sesija — {date_type.today().strftime('%d.%m.%Y')}"
+    title_cell.font = Font(name="Arial", bold=True, size=14, color="1E293B")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 35
+
+    # Headers
+    headers = [
+        "R.br.", "Klijent / Grupa", "Tip", "Datum", "Početak", "Kraj",
+        "Cena (RSD)", "Status", "Plaćeno", "Način plaćanja", "Datum uplate"
+    ]
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    ws.row_dimensions[3].height = 28
+
+    # Column widths
+    col_widths = [6, 25, 14, 14, 10, 10, 14, 14, 12, 16, 14]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # Data rows
+    row_num = 4
+    total_cena = 0
+    total_placeno = 0
+    total_neplaceno = 0
+
+    for idx, s in enumerate(sesija_list, 1):
+        klijent_id = sk_map.get(s.id)
+        grupa_id = sg_map.get(s.id)
+
+        if klijent_id:
+            klijent = klijent_map.get(klijent_id)
+            ime = f"{klijent.ime} {klijent.prezime}" if klijent else "—"
+            tip = "Individualna"
+        elif grupa_id:
+            grupa = grupa_map.get(grupa_id)
+            ime = f"{grupa.naziv}" if grupa else "—"
+            tip = "Grupna"
+        else:
+            ime = "—"
+            tip = "—"
+
+        payments = payment_map.get(s.id, [])
+        is_paid = len(payments) > 0
+
+        nacin = payments[0].nacin_placanja if payments else "—"
+        datum_uplate_val = payments[0].datum_uplate.strftime("%d.%m.%Y") if payments and payments[0].datum_uplate else "—"
+
+        total_cena += s.cena or 0
+        if is_paid:
+            total_placeno += s.cena or 0
+        else:
+            total_neplaceno += s.cena or 0
+
+        row_data = [
+            idx,
+            ime,
+            tip,
+            s.pocetak.strftime("%d.%m.%Y") if s.pocetak else "—",
+            s.pocetak.strftime("%H:%M") if s.pocetak else "—",
+            s.kraj.strftime("%H:%M") if s.kraj else "—",
+            s.cena,
+            s.status.capitalize() if s.status else "—",
+            "Da ✓" if is_paid else "Ne",
+            nacin.capitalize() if nacin != "—" else "—",
+            datum_uplate_val,
+        ]
+
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_num, column=col_idx, value=value)
+            cell.font = cell_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center" if col_idx != 2 else "left", vertical="center")
+
+        # Color paid/unpaid rows
+        payment_cell = ws.cell(row=row_num, column=9)
+        if is_paid:
+            payment_cell.fill = paid_fill
+            payment_cell.font = Font(name="Arial", size=10, bold=True, color="166534")
+        else:
+            payment_cell.fill = unpaid_fill
+            payment_cell.font = Font(name="Arial", size=10, bold=True, color="92400E")
+
+        # Light green background for entire paid row
+        if is_paid:
+            for col_idx in range(1, len(headers) + 1):
+                if col_idx != 9:
+                    ws.cell(row=row_num, column=col_idx).fill = PatternFill("solid", fgColor="F0FDF4")
+
+        row_num += 1
+
+    # Summary section
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:C{row_num}")
+    summary_cell = ws.cell(row=row_num, column=1, value="UKUPNO")
+    summary_cell.font = total_font
+    summary_cell.fill = total_fill
+    summary_cell.alignment = Alignment(horizontal="right")
+
+    total_cell = ws.cell(row=row_num, column=7, value=total_cena)
+    total_cell.font = total_font
+    total_cell.fill = total_fill
+    total_cell.number_format = '#,##0'
+
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:C{row_num}")
+    ws.cell(row=row_num, column=1, value="Ukupno plaćeno").font = Font(name="Arial", bold=True, size=10, color="166534")
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    paid_total_cell = ws.cell(row=row_num, column=7, value=total_placeno)
+    paid_total_cell.font = Font(name="Arial", bold=True, size=10, color="166534")
+    paid_total_cell.fill = paid_fill
+    paid_total_cell.number_format = '#,##0'
+
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:C{row_num}")
+    ws.cell(row=row_num, column=1, value="Ukupno neplaćeno").font = Font(name="Arial", bold=True, size=10, color="92400E")
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    unpaid_total_cell = ws.cell(row=row_num, column=7, value=total_neplaceno)
+    unpaid_total_cell.font = Font(name="Arial", bold=True, size=10, color="92400E")
+    unpaid_total_cell.fill = unpaid_fill
+    unpaid_total_cell.number_format = '#,##0'
+
+    row_num += 1
+    ws.merge_cells(f"A{row_num}:C{row_num}")
+    ws.cell(row=row_num, column=1, value="Broj sesija").font = Font(name="Arial", size=10)
+    ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="right")
+    ws.cell(row=row_num, column=7, value=len(sesija_list)).font = Font(name="Arial", bold=True, size=10)
+
+    # ===== SHEET 2: Per-client summary =====
+    ws2 = wb.create_sheet("Po klijentu")
+
+    ws2.merge_cells("A1:E1")
+    ws2["A1"].value = "Statistika po klijentu"
+    ws2["A1"].font = Font(name="Arial", bold=True, size=14, color="1E293B")
+    ws2["A1"].alignment = Alignment(horizontal="center")
+    ws2.row_dimensions[1].height = 35
+
+    client_headers = ["Klijent", "Br. sesija", "Ukupno (RSD)", "Plaćeno (RSD)", "Neplaćeno (RSD)"]
+    for col_idx, h in enumerate(client_headers, 1):
+        cell = ws2.cell(row=3, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    ws2.column_dimensions["A"].width = 28
+    ws2.column_dimensions["B"].width = 12
+    ws2.column_dimensions["C"].width = 16
+    ws2.column_dimensions["D"].width = 16
+    ws2.column_dimensions["E"].width = 16
+
+    # Aggregate per client
+    client_stats: dict = {}
+    for s in sesija_list:
+        klijent_id = sk_map.get(s.id)
+        grupa_id = sg_map.get(s.id)
+
+        if klijent_id:
+            klijent = klijent_map.get(klijent_id)
+            key = f"{klijent.ime} {klijent.prezime}" if klijent else f"Klijent #{klijent_id}"
+        elif grupa_id:
+            grupa = grupa_map.get(grupa_id)
+            key = f"[Grupa] {grupa.naziv}" if grupa else f"Grupa #{grupa_id}"
+        else:
+            key = "Nepoznato"
+
+        if key not in client_stats:
+            client_stats[key] = {"sessions": 0, "total": 0, "paid": 0, "unpaid": 0}
+
+        client_stats[key]["sessions"] += 1
+        client_stats[key]["total"] += s.cena or 0
+
+        is_paid = s.id in payment_map
+        if is_paid:
+            client_stats[key]["paid"] += s.cena or 0
+        else:
+            client_stats[key]["unpaid"] += s.cena or 0
+
+    row2 = 4
+    for name, stats in sorted(client_stats.items()):
+        ws2.cell(row=row2, column=1, value=name).font = cell_font
+        ws2.cell(row=row2, column=2, value=stats["sessions"]).font = cell_font
+        ws2.cell(row=row2, column=2).alignment = Alignment(horizontal="center")
+        ws2.cell(row=row2, column=3, value=stats["total"]).font = cell_font
+        ws2.cell(row=row2, column=3).number_format = '#,##0'
+        ws2.cell(row=row2, column=4, value=stats["paid"]).font = Font(name="Arial", size=10, color="166534")
+        ws2.cell(row=row2, column=4).number_format = '#,##0'
+        ws2.cell(row=row2, column=4).fill = paid_fill
+        ws2.cell(row=row2, column=5, value=stats["unpaid"]).font = Font(name="Arial", size=10, color="92400E")
+        ws2.cell(row=row2, column=5).number_format = '#,##0'
+        if stats["unpaid"] > 0:
+            ws2.cell(row=row2, column=5).fill = unpaid_fill
+
+        for c in range(1, 6):
+            ws2.cell(row=row2, column=c).border = thin_border
+
+        row2 += 1
+
+    # Save to buffer
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    today_str = date_type.today().strftime("%Y-%m-%d")
+    filename = f"izvestaj_sesije_{today_str}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ============================================
+#  5. MODIFY get_all_sesija to include 'placeno' field
+#     In the non-detailed branch, after building result list,
+#     add this code before `return result`:
+# ============================================
+
+"""
+In the get_all_sesija function, in the `else` (non-detailed) branch,
+you need to also load payment data. Add this BEFORE the `return result`:
+
+    # Check payment status for each session
+    all_cene = database.query(Cena).filter(Cena.status == "placeno").all()
+    paid_sesija_ids = set()
+    for c in all_cene:
+        if c.sesija_2_id:
+            paid_sesija_ids.add(c.sesija_2_id)
+
+Then inside the `for s in sesija_list:` loop, add:
+
+    item['placeno'] = s.id in paid_sesija_ids
+
+This will add a boolean 'placeno' field to each session in the API response.
+"""
 
 ############################################
 #

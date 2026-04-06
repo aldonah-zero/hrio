@@ -169,6 +169,8 @@ const tableConfigs: Record<string, any> = {
       showPagination: true,
       rowsPerPage: 10,
       actionButtons: true,
+      showPaymentButton: true,
+      showExportButton: true,
       columns: [
         {
           label: "Klijent / Grupa",
@@ -204,6 +206,13 @@ const tableConfigs: Record<string, any> = {
           field: "status",
           type: "str",
           required: true,
+        },
+        {
+          label: "Plaćeno",
+          column_type: "field",
+          field: "placeno",
+          type: "payment_status",
+          required: false,
         },
       ],
       formColumns: [
