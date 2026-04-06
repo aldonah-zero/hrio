@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { TableBlock } from "../components/runtime/TableBlock";
+import Dashboard from "./Dashboard";
 
 const tabs = [
   {
@@ -81,6 +82,27 @@ const tabs = [
       >
         <line x1="12" y1="1" x2="12" y2="23" />
         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      </svg>
+    ),
+  },
+  {
+    key: "statistika",
+    label: "Statistika",
+    mobileLabel: "Stats",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
       </svg>
     ),
   },
@@ -482,14 +504,18 @@ const AdminPanel: React.FC = () => {
       <div
         className={`admin-table-container ${animating ? "admin-table-exit" : "admin-table-enter"}`}
       >
-        <TableBlock
-          key={activeTab}
-          id={`table-${activeTab}`}
-          styles={{ width: "100%", minHeight: "400px" }}
-          title={config.title}
-          options={config.options}
-          dataBinding={{ entity: config.entity, endpoint: config.endpoint }}
-        />
+        {activeTab === "statistika" ? (
+          <Dashboard />
+        ) : config ? (
+          <TableBlock
+            key={activeTab}
+            id={`table-${activeTab}`}
+            styles={{ width: "100%", minHeight: "400px" }}
+            title={config.title}
+            options={config.options}
+            dataBinding={{ entity: config.entity, endpoint: config.endpoint }}
+          />
+        ) : null}
       </div>
     </div>
   );
