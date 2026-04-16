@@ -153,6 +153,7 @@ export const TableComponent: React.FC<Props> = ({
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>(
     {},
   );
+  const [globalSearch, setGlobalSearch] = useState<string>("");
   const [sortConfig, setSortConfig] = useState<{
     field: string;
     direction: "asc" | "desc";
@@ -338,11 +339,60 @@ export const TableComponent: React.FC<Props> = ({
   }, [columns, resolvedOptions.formColumns]);
 
   const filteredRows = useMemo(() => {
-    if (Object.keys(columnFilters).length === 0) {
+    const searchTerm = globalSearch.trim().toLowerCase();
+
+    if (Object.keys(columnFilters).length === 0 && !searchTerm) {
       return normalizedRows;
     }
 
+    // Helper to extract the display value for a column (handles lookups)
+    const getCellValueForSearch = (row: any, column: TableColumn): string => {
+      let cellValue: any;
+      if (column.columnType === "lookup" && column.lookupField) {
+        if (column.type === "list") {
+          const relatedArray = row[column.field];
+          if (Array.isArray(relatedArray)) {
+            cellValue = relatedArray
+              .map((item) => item[column.lookupField!])
+              .filter((val) => val !== null && val !== undefined)
+              .join(", ");
+          } else {
+            cellValue = "";
+          }
+        } else {
+          if (column.relationshipKey) {
+            cellValue = getNestedValue(
+              row,
+              `${column.relationshipKey}.${column.lookupField}`,
+            );
+          }
+          if (!cellValue) {
+            cellValue = getNestedValue(
+              row,
+              `${column.field}.${column.lookupField}`,
+            );
+          }
+        }
+      } else {
+        cellValue = row[column.field];
+      }
+      if (cellValue === null || cellValue === undefined) return "";
+      if (Array.isArray(cellValue)) return cellValue.join(", ");
+      return String(cellValue);
+    };
+
     return normalizedRows.filter((row) => {
+      // Global search — match against ANY column
+      if (searchTerm) {
+        const matches = columns.some((col) =>
+          getCellValueForSearch(row, col).toLowerCase().includes(searchTerm),
+        );
+        if (!matches) return false;
+      }
+
+      // Column filters (existing logic)
+      if (Object.keys(columnFilters).length === 0) return true;
+
       return Object.entries(columnFilters).every(([field, filterValue]) => {
         if (!filterValue) return true;
 
@@ -451,7 +501,7 @@ export const TableComponent: React.FC<Props> = ({
         return false;
       });
     });
-  }, [normalizedRows, columnFilters, columns]);
+  }, [normalizedRows, columnFilters, columns, globalSearch]);
 
   const handleFilterChange = (field: string, value: string) => {
     setColumnFilters((prev) => {
@@ -543,7 +593,7 @@ export const TableComponent: React.FC<Props> = ({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, filteredRows.length]);
+  }, [pageSize, filteredRows.length, globalSearch]);
 
   useEffect(() => {
     if (!showModal && !showPaymentModal) {
@@ -1354,6 +1404,109 @@ export const TableComponent: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Global search bar */}
+      {normalizedRows.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            marginBottom: "4px",
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              flex: 1,
+              maxWidth: "360px",
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#94a3b8"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                pointerEvents: "none",
+              }}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              placeholder="Pretraži..."
+              style={{
+                width: "100%",
+                padding: "9px 36px 9px 38px",
+                border: "1.5px solid #e2e8f0",
+                borderRadius: "10px",
+                fontSize: "13px",
+                fontFamily: "inherit",
+                outline: "none",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+                boxSizing: "border-box",
+                backgroundColor: "#fff",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#6366f1";
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 3px rgba(99, 102, 241, 0.1)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#e2e8f0";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+            {globalSearch && (
+              <button
+                type="button"
+                onClick={() => setGlobalSearch("")}
+                style={{
+                  position: "absolute",
+                  right: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#94a3b8",
+                  borderRadius: "6px",
+                }}
+                title="Očisti pretragu"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {/* Action buttons row */}
       {(resolvedOptions.actionButtons || resolvedOptions.showExportButton) && (
         <div
@@ -1365,7 +1518,7 @@ export const TableComponent: React.FC<Props> = ({
             flexWrap: "wrap",
           }}
         >
-          {/* Excel Export Button */}
+          {/* Excel Export Button */}{" "}
           {resolvedOptions.showExportButton && (
             <button
               style={{
@@ -1418,7 +1571,6 @@ export const TableComponent: React.FC<Props> = ({
               Izvezi Excel
             </button>
           )}
-
           {/* Add button */}
           {resolvedOptions.actionButtons && (
             <button
