@@ -1,4 +1,3 @@
-import app as app
 import uvicorn
 import os, json
 import time as time_module
