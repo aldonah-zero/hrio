@@ -1,3 +1,4 @@
+import app as app
 import uvicorn
 import os, json
 import time as time_module
@@ -27,6 +28,28 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 #   Initialize the database
 #
 ############################################
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+scheduler = BackgroundScheduler(timezone="Europe/Belgrade")
+
+@app.on_event("startup")
+def start_scheduler():
+    # Run every hour at minute 0 (e.g. 09:00, 10:00, 11:00…)
+    scheduler.add_job(
+        send_daily_reminders,
+        trigger=CronTrigger(minute=0),
+        id="daily_session_reminders",
+        replace_existing=True,
+        max_instances=1,
+    )
+    scheduler.start()
+    logger.info("Scheduler started — reminders will be sent hourly")
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    scheduler.shutdown()
+    logger.info("Scheduler stopped")
 
 def init_db():
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/Class_Diagram.db")
@@ -419,6 +442,127 @@ def get_db():
 #
 ############################################
 
+def send_reminder_email(client_name, client_email, pocetak, kraj, is_group=False, grupa_naziv=None):
+    """Send a 24h-before reminder email to a client."""
+    if not client_email:
+        return
+
+    app_url = os.getenv("APP_URL", "https://hrio-frontend-5c8704.onrender.com/")
+
+    session_type_label = f"Grupna sesija — {grupa_naziv}" if is_group else "Individualna sesija"
+
+    html = f"""
+<div style="background:#f2f2f7;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#1a1a1a;">
+<div style="max-width:520px;margin:auto;">
+
+<div style="background:#fff;border-radius:16px;padding:28px 24px 24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="font-size:22px;margin-bottom:8px;">⏰ Podsetnik za sesiju sutra</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Poštovani/a <strong>{client_name}</strong>,</div>
+<div style="font-size:15px;color:#1a1a1a;margin-bottom:4px;">Podsećamo Vas da imate zakazanu sesiju <strong>sutra</strong>.</div>
+</div>
+
+<div style="background:#fff;border-radius:16px;padding:24px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="border:1.5px dashed #d1d5db;border-radius:12px;padding:20px;">
+
+<div style="font-size:15px;color:#333;margin-bottom:14px;">📅 <strong>{format_date_long(pocetak)}</strong></div>
+<div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">{session_type_label}</div>
+<div style="font-size:15px;font-weight:600;color:#111;margin-bottom:4px;">{format_time(pocetak)} – {format_time(kraj)}</div>
+
+<div style="border-top:1.5px dashed #d1d5db;margin:16px 0;"></div>
+
+<div style="font-size:14px;color:#555;line-height:1.6;">
+Molimo Vas da dođete <strong>5 minuta</strong> pre zakazanog termina.
+</div>
+
+</div>
+</div>
+
+<div style="background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:8px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+<div style="font-size:13px;color:#777;line-height:1.5;"><strong>Pravila otkazivanja</strong><br>Sesija se može otkazati najkasnije <strong>24 sata</strong> pre termina.<br>Kašnjenje duže od <strong>10 minuta</strong> smatra se propuštenom sesijom.</div>
+</div>
+
+<div style="text-align:center;font-size:13px;color:#9ca3af;margin-top:14px;line-height:1.5;">
+Vidimo se sutra! <strong style="color:#6b7280;">PsihApp</strong>
+</div>
+
+</div>
+</div>
+"""
+
+    try:
+        resend.Emails.send({
+            "from": "Hrio <noreply@hrioapp.com>",
+            "to": [client_email],
+            "subject": f"⏰ Podsetnik: sesija sutra u {format_time(pocetak)}",
+            "html": html
+        })
+        logger.info(f"Reminder sent to {client_email} for session at {pocetak}")
+    except Exception as e:
+        logger.error(f"Failed to send reminder to {client_email}: {e}")
+
+
+def send_daily_reminders():
+    """
+    Scans all sessions happening ~24h from now (within a 1-hour window)
+    and sends a reminder email to each client.
+    Runs every hour — the 1-hour window prevents missing or duplicating.
+    """
+    from datetime import datetime, timedelta
+
+    db = SessionLocal()
+    try:
+        now = datetime.now()
+        window_start = now + timedelta(hours=23, minutes=30)
+        window_end = now + timedelta(hours=24, minutes=30)
+
+        logger.info(f"Reminder job: scanning sessions between {window_start} and {window_end}")
+
+        upcoming_sessions = db.query(Sesija).filter(
+            Sesija.pocetak >= window_start,
+            Sesija.pocetak < window_end,
+            Sesija.status == "zakazano"
+        ).all()
+
+        logger.info(f"Reminder job: found {len(upcoming_sessions)} session(s) needing reminders")
+
+        for sesija in upcoming_sessions:
+            try:
+                sk = db.query(SesijaKlijent).filter(SesijaKlijent.sesija_id == sesija.id).first()
+                if sk and sk.klijent_id:
+                    klijent = db.query(Klijent).filter(Klijent.id == sk.klijent_id).first()
+                    if klijent and klijent.email:
+                        send_reminder_email(
+                            client_name=f"{klijent.ime} {klijent.prezime}",
+                            client_email=klijent.email,
+                            pocetak=sesija.pocetak,
+                            kraj=sesija.kraj,
+                            is_group=False
+                        )
+                    continue
+
+                sg = db.query(SesijaGrupa).filter(SesijaGrupa.sesija_1_id == sesija.id).first()
+                if sg and sg.grupa_id:
+                    grupa = db.query(Grupa).filter(Grupa.id == sg.grupa_id).first()
+                    if grupa:
+                        members = db.query(GrupaKlijent).filter(GrupaKlijent.grupa_id == grupa.id).all()
+                        for gk in members:
+                            klijent = db.query(Klijent).filter(Klijent.id == gk.klijent_id).first()
+                            if klijent and klijent.email:
+                                send_reminder_email(
+                                    client_name=f"{klijent.ime} {klijent.prezime}",
+                                    client_email=klijent.email,
+                                    pocetak=sesija.pocetak,
+                                    kraj=sesija.kraj,
+                                    is_group=True,
+                                    grupa_naziv=grupa.naziv
+                                )
+            except Exception as e:
+                logger.error(f"Error processing reminder for session {sesija.id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Reminder job failed: {e}")
+    finally:
+        db.close()
 @app.get("/", tags=["System"])
 def root():
     return {"name": "Class_Diagram API", "version": "1.0.0", "status": "running"}
