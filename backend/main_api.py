@@ -27,28 +27,6 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 #   Initialize the database
 #
 ############################################
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-
-scheduler = BackgroundScheduler(timezone="Europe/Belgrade")
-
-@app.on_event("startup")
-def start_scheduler():
-    # Run every hour at minute 0 (e.g. 09:00, 10:00, 11:00…)
-    scheduler.add_job(
-        send_daily_reminders,
-        trigger=CronTrigger(minute=0),
-        id="daily_session_reminders",
-        replace_existing=True,
-        max_instances=1,
-    )
-    scheduler.start()
-    logger.info("Scheduler started — reminders will be sent hourly")
-
-@app.on_event("shutdown")
-def shutdown_scheduler():
-    scheduler.shutdown()
-    logger.info("Scheduler stopped")
 
 def init_db():
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/Class_Diagram.db")
@@ -100,6 +78,31 @@ app = FastAPI(
         {"name": "Klijent Relationships", "description": "Manage Klijent relationships"},
     ]
 )
+
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+scheduler = BackgroundScheduler(timezone="Europe/Belgrade")
+
+@app.on_event("startup")
+def start_scheduler():
+    # Run every hour at minute 0 (e.g. 09:00, 10:00, 11:00…)
+    scheduler.add_job(
+        send_daily_reminders,
+        trigger=CronTrigger(minute=0),
+        id="daily_session_reminders",
+        replace_existing=True,
+        max_instances=1,
+    )
+    scheduler.start()
+    logger.info("Scheduler started — reminders will be sent hourly")
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    scheduler.shutdown()
+    logger.info("Scheduler stopped")
+
 def format_datetime(dt):
     return dt.strftime("%d.%m.%Y %H:%M")
 
