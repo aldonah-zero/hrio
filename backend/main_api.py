@@ -87,16 +87,16 @@ scheduler = BackgroundScheduler(timezone="Europe/Belgrade")
 
 @app.on_event("startup")
 def start_scheduler():
-    # Run every hour at minute 0 (e.g. 09:00, 10:00, 11:00…)
     scheduler.add_job(
         send_daily_reminders,
-        trigger=CronTrigger(minute=0),
+        trigger=CronTrigger(hour=8, minute=0),
         id="daily_session_reminders",
         replace_existing=True,
         max_instances=1,
     )
     scheduler.start()
-    logger.info("Scheduler started — reminders will be sent hourly")
+    logger.info("Scheduler started — reminders will be sent daily at 08:00")
+
 
 @app.on_event("shutdown")
 def shutdown_scheduler():
@@ -505,27 +505,26 @@ Vidimo se sutra! <strong style="color:#6b7280;">PsihApp</strong>
 
 def send_daily_reminders():
     """
-    Scans all sessions happening ~24h from now (within a 1-hour window)
-    and sends a reminder email to each client.
-    Runs every hour — the 1-hour window prevents missing or duplicating.
+    Runs once daily at 08:00. Finds all sessions scheduled for tomorrow
+    and sends reminder emails to each client.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, time
 
     db = SessionLocal()
     try:
-        now = datetime.now()
-        window_start = now + timedelta(hours=23, minutes=30)
-        window_end = now + timedelta(hours=24, minutes=30)
+        tomorrow = datetime.now().date() + timedelta(days=1)
+        tomorrow_start = datetime.combine(tomorrow, time(0, 0, 0))
+        tomorrow_end = datetime.combine(tomorrow, time(23, 59, 59))
 
-        logger.info(f"Reminder job: scanning sessions between {window_start} and {window_end}")
+        logger.info(f"Reminder job: scanning sessions for {tomorrow}")
 
         upcoming_sessions = db.query(Sesija).filter(
-            Sesija.pocetak >= window_start,
-            Sesija.pocetak < window_end,
+            Sesija.pocetak >= tomorrow_start,
+            Sesija.pocetak <= tomorrow_end,
             Sesija.status == "zakazano"
         ).all()
 
-        logger.info(f"Reminder job: found {len(upcoming_sessions)} session(s) needing reminders")
+        logger.info(f"Reminder job: found {len(upcoming_sessions)} session(s) for tomorrow")
 
         for sesija in upcoming_sessions:
             try:
